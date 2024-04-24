@@ -1,0 +1,116 @@
+<?php
+
+namespace App\Services\Employee;
+
+use App\Models\Employee\Employee;
+
+use App\Models\Employee\PersonalInfo\Address;
+use App\Models\Employee\PersonalInfo\Contact;
+use App\Models\Other\UserState;
+use App\Models\User;
+use Exception;
+use Illuminate\Support\Facades\DB;
+
+class EmployeeService
+{
+    public function createEmployee($request)
+    {
+        // Iniciar una transacción de base de datos
+        return DB::transaction(function () use ($request) {
+            try {
+                // Crear el registro del empleado con los datos validados del request
+                $employee = new Employee($request->input('employee'));
+
+                // Crear el registro de contacto asociado al empleado
+                $contactData = $request->input('employee.contact');
+                if ($contactData) {
+                    $contact = new Contact($contactData);
+                    $contact->save();
+                    $employee->contact()->associate($contact);
+                }
+
+                // Crear el registro de dirección asociado al empleado
+                $addressData = $request->input('employee.address');
+                if ($addressData) {
+                    $address = new Address($addressData);
+                    $address->save();
+                    $employee->address()->associate($address);
+                }
+
+                // Guardar el empleado
+                $employee->save();
+
+                // Generar el nombre de usuario a partir del primer y segundo nombre del empleado
+                $userName = $employee->first_name . $employee->last_name;
+                $baseUserName = $userName;
+                $counter = 1;
+
+                // Verificar si el nombre de usuario ya existe y generar un nombre único
+                while (User::where('name', $userName)->exists()) {
+                    $userName = $baseUserName . $counter;
+                    $counter++;
+                }
+
+                // Buscar el estado 'activo' en la tabla 'user_states'
+                $activeState = UserState::where('name', 'Activo')->first();
+
+                // Obtener el correo electrónico personal del empleado
+                $employeeEmail = $request->input('employee.contact.personal_email');
+
+                // Crear el usuario asociado al empleado
+                $user = new User([
+                    'name' => $userName,
+                    'email' => $employeeEmail, // Asumiendo que se envía el email en el request
+                    'password' => bcrypt('password'), // Puedes generar una contraseña aleatoria aquí
+                    'employee_id' => $employee->id,
+                    'user_state_id' => $activeState ? $activeState->id : null, // Asignar el id del estado 'activo' si existe
+                ]);
+                $user->save();
+
+                // Devolver el empleado creado
+                return $employee;
+            } catch (Exception $e) {
+                // Revertir la transacción en caso de error
+                throw new Exception($e->getMessage());
+            }
+        });
+    }
+
+    public function updateEmployee($employeeId, $requestData)
+    {
+        // Buscar al empleado por su ID
+        $employee = Employee::findOrFail($employeeId);
+
+        // Iniciar una transacción de base de datos
+        return DB::transaction(function () use ($employee, $requestData) {
+            try {
+                // Actualizar los datos del empleado
+                $employee->update($requestData['employee']);
+
+                // Actualizar los datos de contacto si se proporcionan
+                if (isset ($requestData['employee']['contact'])) {
+                    $contactData = $requestData['employee']['contact'];
+                    $contact = $employee->contact ?? new Contact();
+                    $contact->fill($contactData);
+                    $contact->save();
+                    $employee->contact()->associate($contact);
+                }
+
+                // Actualizar los datos de dirección si se proporcionan
+                if (isset ($requestData['employee']['address'])) {
+                    $addressData = $requestData['employee']['address'];
+                    $address = $employee->address ?? new Address();
+                    $address->fill($addressData);
+                    $address->save();
+                    $employee->address()->associate($address);
+                }
+            } catch (Exception $e) {
+                // Revertir la transacción en caso de error
+                throw new Exception($e->getMessage());
+            }
+
+            // Devolver el empleado actualizado
+            return $employee;
+        });
+    }
+}
