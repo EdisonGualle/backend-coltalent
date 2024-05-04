@@ -112,7 +112,7 @@ class AuthenticationService
             ? 'Usuario inactivo.'
             : 'Correo inactivo.';
 
-        return ['successful' => false, 'message' => 'ERROR. ' . $message];
+        return ['successful' => false, 'message' =>$message];
     }
 
     protected function handleBlockedUser($remainingTime)

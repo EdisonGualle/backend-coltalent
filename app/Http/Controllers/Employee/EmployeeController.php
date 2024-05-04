@@ -19,6 +19,26 @@ class EmployeeController extends Controller
     }
 
 
+    public function index()
+    {
+        try {
+            $employees = $this->employeeService->getAllEmployees();
+            return $this->respondWithSuccess('Empleados obtenidos exitosamente.', $employees);
+        } catch (Exception $e) {
+            return $this->respondWithError('Error al obtener los empleados: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $employee = $this->employeeService->getEmployeeById($id);
+            return $this->respondWithSuccess('Empleado obtenido exitosamente.', $employee);
+        } catch (Exception $e) {
+            return $this->respondWithError('Error al obtener el empleado: ' . $e->getMessage(), 500);
+        }
+    }
+
     public function store(StoreEmployeeRequest $request)
     {
         try {

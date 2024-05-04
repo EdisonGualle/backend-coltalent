@@ -17,7 +17,6 @@ class CreateUserRequest extends FormRequest
         return [
             'name' => 'required|string|max:50|unique:users,name',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8',
             'employee_id' => 'required|exists:employees,id|unique:users,employee_id',
             'role_id' => 'nullable|exists:roles,id',
             'user_state_id' => 'nullable|exists:user_states,id',
@@ -40,7 +39,7 @@ class CreateUserRequest extends FormRequest
             'password.required' => 'La contraseña es obligatoria.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'employee_id.required' => 'El identificador de empleado es obligatorio.',
-            'employee_id.unique' => 'Ya existe un usuario con ese identificador de empleado.',
+            'employee_id.unique' => 'Ya existe un usuario asociado a ese empleado.',
             'user_state_id.exists' => 'El estado de usuario seleccionado no existe.',
         ];
     }

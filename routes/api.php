@@ -11,7 +11,9 @@ use App\Http\Controllers\Employee\EmployeeController;
 use App\Http\Controllers\Organization\DepartmentController;
 use App\Http\Controllers\Organization\PositionController;
 use App\Http\Controllers\Organization\UnitController;
+use App\Http\Controllers\Role\RoleController;
 use App\Http\Controllers\User\UserController;
+use App\Http\Controllers\User\UserStateController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -74,8 +76,19 @@ Route::middleware('auth:sanctum')->group(function () {
     //User
     Route::get('/user-auth', [UserController::class, 'userAuth']);
 
+    //Roles
+    Route::get('roles', [RoleController::class, 'index']);
+    Route::get('roles/{role}', [RoleController::class, 'show']);
+
+    //Estados
+    Route::get('user/states', [UserStateController::class, 'index']);
+    Route::get('/user/states/{state}', [UserStateController::class, 'show']);
 
 
+    //Employees
+    Route::get('employees', [EmployeeController::class, 'index']);
+    Route::get('employees/{employee}', [EmployeeController::class, 'show']);
+    
     Route::prefix('users/{user}')->middleware('verifyUserExists')->group(function () {
         Route::get('configuration', [UserController::class, 'showConfiguration']);
         Route::put('configuration', [UserController::class, 'updateConfiguration']);

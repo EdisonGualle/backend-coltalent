@@ -13,6 +13,31 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeService
 {
+    public function getAllEmployees()
+    {
+        $employees = Employee::with('contact', 'address', 'position')
+            ->get()
+            ->map(function ($employee) {
+                $employee->full_name = $employee->getFullNameAttribute();
+                unset ($employee->contact_id, $employee->address_id, $employee->position_id);
+                return $employee;
+            })
+            ->toArray();
+
+        return $employees;
+    }
+
+    public function getEmployeeById($id)
+    {
+        $employee = Employee::with('contact', 'address', 'position')->findOrFail($id);
+
+        $employeeArray = $employee->toArray();
+        $employeeArray['full_name'] = $employee->getFullNameAttribute();
+        unset($employeeArray['contact_id'], $employeeArray['address_id'], $employeeArray['position_id']);
+
+        return $employeeArray;
+    }
+
     public function createEmployee($request)
     {
         // Iniciar una transacción de base de datos

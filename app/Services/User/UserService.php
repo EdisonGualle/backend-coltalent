@@ -16,7 +16,6 @@ use Exception;
 class UserService
 {
 
-
     public function getUserConfiguration($id)
     {
         $user = User::with('employee.contact')->findOrFail($id);
@@ -32,10 +31,18 @@ class UserService
     }
     public function getAllUsers()
     {
-        $users = User::with('userState', 'role')->get();
+        $users = User::with('userState', 'role', 'employee')->get();
         $usersData = $users->map(function ($user) {
             $userData = $user->toArray();
-            unset ($userData['user_state_id'], $userData['role_id']);
+
+            if ($user->employee) {
+                $fullName = $user->employee->getFullNameAttribute();
+            } else {
+                $fullName = null;
+            }
+            $userData['employee_full_name'] = $fullName;
+            unset ($userData['user_state_id'], $userData['role_id'], $userData['employee']);
+
             return $userData;
         });
         return $usersData;
@@ -52,33 +59,53 @@ class UserService
     {
         try {
             $data['user_state_id'] = $data['user_state_id'] ?? UserState::where('name', 'Activo')->firstOrFail()->id;
-            $data['password'] = Hash::make($data['password']);
-    
+            
+            // Generate a random password
+            $password = $this->generateRandomPassword();
+            $data['password'] = Hash::make($password);
+
             // Asignar rol por defecto si no se proporciona uno
             $data['role_id'] = $data['role_id'] ?? Role::where('name', 'empleado')->firstOrFail()->id;
-    
+
             $user = User::create($data);
-    
+
             // Cargar relaciones role y user_state
             $user->load('role', 'userState');
-    
+
             // Obtener los datos del usuario con las relaciones cargadas
             $userData = $user->toArray();
-    
+
             // Eliminar role_id y user_state_id del array de datos
             unset($userData['role_id'], $userData['user_state_id']);
-    
+
+            // Add the generated password to the response
+            $userData['password'] = $password;
+
             return $userData;
         } catch (Exception $e) {
             throw new Exception($e->getMessage());
         }
     }
-    
-    
+
+    private function generateRandomPassword(): string
+    {
+        // Generate a random password using a combination of letters, numbers, and symbols
+        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
+        $password = '';
+        $length = 10;
+
+        for ($i = 0; $i < $length; $i++) {
+            $password .= $characters[rand(0, strlen($characters) - 1)];
+        }
+
+        return $password;
+    }
+
+
     public function updateUser($id, $data)
     {
-        $user = User::with('userState', 'role')->findOrFail($id);
-
+        $user = User::findOrFail($id);
+    
         DB::beginTransaction();
         try {
             // Actualizar los datos del usuario
@@ -88,22 +115,17 @@ class UserService
             $user->update($data);
 
             DB::commit();
-
-            // Eliminar el campo user_state_id de la respuesta
-            $userData = $user->toArray();
-            unset($userData['user_state_id'], $userData['role_id']);
-
-            return $userData;
-
+            
+            return $user;
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al actualizar el usuario: ' . $e->getMessage());
         }
     }
-
+    
     public function updateUserPhoto($id, $photo)
     {
-        $user = User::with('userState', 'role')->findOrFail($id);
+        $user = User::findOrFail($id);
 
         $oldPhotoPath = $user->photo;
 
@@ -121,10 +143,8 @@ class UserService
                 Storage::disk('public')->delete($oldPhotoPath);
             }
             DB::commit();
-            // Eliminar el campo user_state_id de la respuesta
-            $userData = $user->toArray();
-            unset($userData['user_state_id'], $userData['role_id']);
-            return $userData;
+          
+            return $user;
 
         } catch (Exception $e) {
             DB::rollBack();
@@ -135,11 +155,11 @@ class UserService
     public function getUserAuth()
     {
         $user = Auth::user();
-    
+
         if (!$user) {
             throw new Exception("El usuario no está autenticado.");
         }
-    
+
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -150,7 +170,7 @@ class UserService
         ];
     }
 
-    
+
     public function disableUser($id)
     {
         $user = User::findOrFail($id);
@@ -164,7 +184,7 @@ class UserService
 
             $userData = $user->load('userState', 'role')->toArray();
             unset($userData['user_state_id'], $userData['role_id']);
-    
+
             return $userData;
         } catch (Exception $e) {
             DB::rollBack();
@@ -173,25 +193,25 @@ class UserService
     }
 
     public function enableUser($id)
-{
-    $user = User::findOrFail($id);
-    $activeStateId = UserState::where('name', 'Activo')->firstOrFail()->id;
+    {
+        $user = User::findOrFail($id);
+        $activeStateId = UserState::where('name', 'Activo')->firstOrFail()->id;
 
-    DB::beginTransaction();
-    try {
-        $user->user_state_id = $activeStateId;
-        $user->save();
-        DB::commit();
+        DB::beginTransaction();
+        try {
+            $user->user_state_id = $activeStateId;
+            $user->save();
+            DB::commit();
 
-        $userData = $user->load('userState', 'role')->toArray();
-        unset($userData['user_state_id'], $userData['role_id']);
+            $userData = $user->load('userState', 'role')->toArray();
+            unset($userData['user_state_id'], $userData['role_id']);
 
-        return $userData;
-    } catch (Exception $e) {
-        DB::rollBack();
-        throw new Exception('Error al habilitar al usuario: ' . $e->getMessage());
+            return $userData;
+        } catch (Exception $e) {
+            DB::rollBack();
+            throw new Exception('Error al habilitar al usuario: ' . $e->getMessage());
+        }
     }
-}
 
     public function deleteUser($id)
     {
