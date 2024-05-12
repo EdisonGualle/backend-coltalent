@@ -4,14 +4,19 @@ namespace App\Http\Requests\User;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
+use App\Models\User;
 
 class UpdateUserRequest extends FormRequest
 {
     public function rules()
     {
         $userId = $this->route('user');
+        $authUserId = auth()->id();
 
-        return [
+        $user = User::find($userId);
+
+        $rules = [
             'name' => [
                 'nullable',
                 'string',
@@ -24,10 +29,24 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users')->ignore($userId),
             ],
             'password' => 'nullable|string|min:8|confirmed',
-            'employee_id' => 'nullable|exists:employees,id|unique:users,employee_id,' . $userId,
-            'role_id' => 'nullable|exists:roles,id',
-            'user_state_id' => 'nullable|exists:user_states,id',
+            'employee_id' => ['nullable', 'exists:employees,id', 'unique:users,employee_id,' . $userId, function ($attribute, $value, $fail) use ($userId, $authUserId, $user) {
+                if ($userId == $authUserId && $value != $user->employee_id) {
+                    $fail('No puedes cambiar tu asociación con el empleado.');
+                }
+            }],
+            'role_id' => ['nullable', 'exists:roles,id', function ($attribute, $value, $fail) use ($userId, $authUserId, $user) {
+                if ($userId == $authUserId && $value != $user->role_id) {
+                    $fail('No puedes cambiar tu propio rol.');
+                }
+            }],
+            'user_state_id' => ['nullable', 'exists:user_states,id', function ($attribute, $value, $fail) use ($userId, $authUserId, $user) {
+                if ($userId == $authUserId && $value != $user->user_state_id) {
+                    $fail('No puedes cambiar tu propio estado.');
+                }
+            }],
         ];
+
+        return $rules;
     }
 
     public function messages()
@@ -44,7 +63,6 @@ class UpdateUserRequest extends FormRequest
             'name.unique' => 'El nombre ya está en uso por otro usuario.',
             'email.unique' => 'El correo electrónico ya está en uso por otro usuario.',
             'employee_id.unique' => 'Ya existe un usuario asociado a ese empleado.',
-
         ];
     }
 }

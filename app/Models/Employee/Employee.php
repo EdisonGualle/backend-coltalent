@@ -12,6 +12,7 @@ use Illuminate\Notifications\Notifiable;
 
 use App\Models\Employee\PersonalInfo\Address;
 use App\Models\Employee\PersonalInfo\Contact;
+use App\Models\Organization\Department;
 use App\Models\Organization\Position;
 use App\Models\Organization\Unit;
 use App\Models\User;
@@ -44,12 +45,21 @@ class Employee extends Model
         'updated_at'
     ];
 
+    // Obtener el nombre completo del empleado
     public function getFullNameAttribute()
     {
         $fullName = trim($this->first_name . ' ' . $this->second_name . ' ' . $this->last_name . ' ' . $this->second_last_name);
         return $fullName !== '' ? $fullName : null;
     }
 
+    // Obtener el nombre del empleado
+    public function getNameAttribute()
+    {
+        $Name = trim($this->first_name . ' ' . $this->last_name);
+        return $Name !== '' ? $Name : null;
+    }
+
+    // Obtener la foto del usuario
     public function userPhoto()
     {
         return $this->user->photo;
@@ -59,6 +69,12 @@ class Employee extends Model
     public function user()
     {
         return $this->hasOne(User::class);
+    }
+
+    //Relacion con department 1 - 1
+    public function department()
+    {
+        return $this->hasOne(Department::class);
     }
 
     //Relacion con unit 1 - 1

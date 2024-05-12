@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Other\UserState;
 use App\Models\Role;
 use Exception;
+use Illuminate\Support\Facades\Log;
 
 class UserService
 {
@@ -36,11 +37,11 @@ class UserService
             $userData = $user->toArray();
 
             if ($user->employee) {
-                $fullName = $user->employee->getFullNameAttribute();
+                $name = $user->employee->getNameAttribute();
             } else {
-                $fullName = null;
+                $name = null;
             }
-            $userData['employee_full_name'] = $fullName;
+            $userData['employee_name'] = $name;
             unset ($userData['user_state_id'], $userData['role_id'], $userData['employee']);
 
             return $userData;
@@ -112,11 +113,21 @@ class UserService
             if (isset($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
             }
+            Log::info('Datos recibidos del front-end servicio:', $data);
             $user->update($data);
-
+            Log::info('Datos actualizados servicio:', ['user' => $user]);
+    
             DB::commit();
-            
-            return $user;
+    
+            $userData = $user->load('userState', 'role', 'employee')->toArray();
+            if ($user->employee) {
+                $userData['employee_name'] = $user->employee->getNameAttribute();
+            } else {
+                $userData['employee_name'] = null;
+            }
+         
+            return $userData;
+    
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al actualizar el usuario: ' . $e->getMessage());
@@ -175,44 +186,54 @@ class UserService
     {
         $user = User::findOrFail($id);
         $inactiveStateId = UserState::where('name', 'Inactivo')->firstOrFail()->id;
-
+    
         DB::beginTransaction();
         try {
             $user->user_state_id = $inactiveStateId;
             $user->save();
             DB::commit();
-
-            $userData = $user->load('userState', 'role')->toArray();
-            unset($userData['user_state_id'], $userData['role_id']);
-
+    
+            $userData = $user->load('userState', 'role', 'employee')->toArray();
+            if ($user->employee) {
+                $userData['employee_name'] = $user->employee->getNameAttribute();
+            } else {
+                $userData['employee_name'] = null;
+            }
+            unset($userData['user_state_id'], $userData['role_id'], $userData['employee']);
+    
             return $userData;
         } catch (Exception $e) {
             DB::rollBack();
             throw $e;
         }
     }
-
+    
     public function enableUser($id)
     {
         $user = User::findOrFail($id);
         $activeStateId = UserState::where('name', 'Activo')->firstOrFail()->id;
-
+    
         DB::beginTransaction();
         try {
             $user->user_state_id = $activeStateId;
             $user->save();
             DB::commit();
-
-            $userData = $user->load('userState', 'role')->toArray();
-            unset($userData['user_state_id'], $userData['role_id']);
-
+    
+            $userData = $user->load('userState', 'role', 'employee')->toArray();
+            if ($user->employee) {
+                $userData['employee_name'] = $user->employee->getNameAttribute();
+            } else {
+                $userData['employee_name'] = null;
+            }
+            unset($userData['user_state_id'], $userData['role_id'], $userData['employee']);
+    
             return $userData;
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al habilitar al usuario: ' . $e->getMessage());
         }
     }
-
+    
     public function deleteUser($id)
     {
         $user = User::findOrFail($id);

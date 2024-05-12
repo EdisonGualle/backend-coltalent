@@ -2,6 +2,7 @@
 
 namespace App\Models\Organization;
 
+use App\Models\Employee\Employee;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -11,7 +12,8 @@ class Department extends Model
 
     protected $fillable = [
         'name',
-        'function'
+        'function',
+        'head_employee_id',
     ];
 
     protected $hidden = [
@@ -21,5 +23,10 @@ class Department extends Model
     
     public function unit(){
         return $this->hasMany(Unit::class);
+    }
+
+    public function headEmployeeDepartament()
+    {
+        return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 }
