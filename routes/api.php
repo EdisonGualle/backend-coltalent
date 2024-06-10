@@ -8,7 +8,7 @@ use App\Http\Controllers\Employee\Backgrounds\WorkReferenceController;
 use App\Http\Controllers\Employee\Education\FormalEducationController;
 use App\Http\Controllers\Employee\Education\TrainingController;
 use App\Http\Controllers\Employee\EmployeeController;
-use App\Http\Controllers\Organization\DepartmentController;
+use App\Http\Controllers\Organization\DirectionController;
 use App\Http\Controllers\Organization\PositionController;
 use App\Http\Controllers\Organization\UnitController;
 use App\Http\Controllers\Role\RoleController;
@@ -65,13 +65,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResources([
         'users' => UserController::class,
         'employees' => EmployeeController::class,
-        'departaments'=> DepartmentController::class,
+        'directions'=> DirectionController::class,
         'units' => UnitController::class,
         'positions' => PositionController::class,
-    ], [
-        'users' => ['index', 'show', 'store', 'update', 'destroy'],
-        'employees' => ['index', 'show', 'store', 'update', 'destroy'],
-    ]); 
+    ],); 
 
     //User
     Route::get('/user-auth', [UserController::class, 'userAuth']);

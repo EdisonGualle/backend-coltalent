@@ -4,21 +4,22 @@ namespace App\Services\Organization;
 
 use App\Models\Organization\Position;
 use App\Services\ResponseService;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Http\JsonResponse;
-
 
 class PositionService extends ResponseService
 {
     private function formatPositionData(Position $position): array
     {
         return array_merge(
-            $position->only('id', 'name', 'function'),
+            $position->only('id', 'name', 'function', 'is_manager', 'is_general_manager'),
             [
                 'unit' => $position->unit ? [
                     'id' => $position->unit->id,
                     'name' => $position->unit->name,
+                ] : null,
+                'direction' => $position->direction ? [
+                    'id' => $position->direction->id,
+                    'name' => $position->direction->name,
                 ] : null,
             ]
         );
@@ -27,7 +28,7 @@ class PositionService extends ResponseService
     public function getAllPositions(): JsonResponse
     {
         try {
-            $positions = Position::with('unit:id,name')
+            $positions = Position::with('unit:id,name', 'direction:id,name')
                 ->get()
                 ->map(function ($position) {
                     return $this->formatPositionData($position);
@@ -41,31 +42,9 @@ class PositionService extends ResponseService
 
     public function createPosition(array $data): JsonResponse
     {
-        $messages = [
-            'name.required' => 'El nombre del cargo es obligatorio.',
-            'name.string' => 'El nombre del cargo debe ser una cadena de texto.',
-            'name.max' => 'El nombre del cargo no puede tener más de 255 caracteres.',
-            'name.unique' => 'Ya existe un cargo con ese nombre.',
-            'function.required' => 'La función del cargo es obligatoria.',
-            'function.string' => 'La función del cargo debe ser una cadena de texto.',
-            'function.max' => 'La función del cargo no puede tener más de 255 caracteres.',
-            'unit_id.required' => 'El ID de la unidad es obligatorio.',
-            'unit_id.exists' => 'La unidad seleccionada no existe.',
-        ];
-
-        $validator = Validator::make($data, [
-            'name' => 'required|string|max:255|unique:positions,name',
-            'function' => 'required|string|max:255',
-            'unit_id' => 'required|exists:units,id',
-        ], $messages);
-
-        if ($validator->fails()) {
-            throw new ValidationException($validator);
-        }
-
         try {
             $position = Position::create($data);
-            $position->load('unit');
+            $position->load('unit', 'direction');
 
             return $this->successResponse('Posición creada con éxito', $this->formatPositionData($position), 201);
         } catch (\Exception $e) {
@@ -76,7 +55,7 @@ class PositionService extends ResponseService
     public function getPositionById(string $id): JsonResponse
     {
         try {
-            $position = Position::with('unit:id,name')->findOrFail($id);
+            $position = Position::with('unit:id,name', 'direction:id,name')->findOrFail($id);
 
             return $this->successResponse('Detalles de la posición obtenidos con éxito', $this->formatPositionData($position));
         } catch (\Exception $e) {
@@ -88,28 +67,9 @@ class PositionService extends ResponseService
     {
         $position = Position::findOrFail($id);
 
-        $messages = [
-            'name.string' => 'El nombre del cargo  debe ser una cadena de texto.',
-            'name.max' => 'El nombre del cargo no puede tener más de 255 caracteres.',
-            'name.unique' => 'Ya existe un cargo con ese nombre.',
-            'function.string' => 'La función del cargo debe ser una cadena de texto.',
-            'function.max' => 'La función del cargo no puede tener más de 255 caracteres.',
-            'unit_id.exists' => 'La unidad seleccionada no existe.',
-        ];
-
-        $validator = Validator::make($data, [
-            'name' => 'string|max:255|unique:positions,name,' . $position->id,
-            'function' => 'string|max:255',
-            'unit_id' => 'exists:units,id',
-        ], $messages);
-
-        if ($validator->fails()) {
-            throw new ValidationException($validator);
-        }
-
         try {
             $position->update($data);
-            $position->load('unit');
+            $position->load('unit', 'direction');
 
             return $this->successResponse('Posición actualizada con éxito', $this->formatPositionData($position));
         } catch (\Exception $e) {

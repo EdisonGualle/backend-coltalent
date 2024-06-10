@@ -19,6 +19,7 @@ class EmployeeService
             ->get()
             ->map(function ($employee) {
                 $employee->full_name = $employee->getFullNameAttribute();
+                $employee->photo = $employee->userPhoto();
                 unset ($employee->contact_id, $employee->address_id, $employee->position_id);
                 return $employee;
             })
@@ -33,6 +34,7 @@ class EmployeeService
 
         $employeeArray = $employee->toArray();
         $employeeArray['full_name'] = $employee->getFullNameAttribute();
+        $employeeArray['photo'] = $employee->userPhoto();
         unset($employeeArray['contact_id'], $employeeArray['address_id'], $employeeArray['position_id']);
 
         return $employeeArray;
@@ -138,4 +140,46 @@ class EmployeeService
             return $employee;
         });
     }
+
+    public function deleteEmployee($id) {
+        // Iniciar una transacción de base de datos
+        return DB::transaction(function () use ($id) {
+            try {
+                // Buscar al empleado por su ID
+                $employee = Employee::findOrFail($id);
+    
+                // Eliminar los registros relacionados en la tabla employees
+                $employee->formalEducations()->delete();
+                $employee->trainings()->delete();
+                $employee->workExperiences()->delete();
+                $employee->workReferences()->delete();
+                $employee->publications()->delete();
+    
+                // Eliminar el registro de contacto asociado al empleado, si existe
+                if ($employee->contact) {
+                    $employee->contact->delete();
+                }
+    
+                // Eliminar el registro de dirección asociado al empleado, si existe
+                if ($employee->address) {
+                    $employee->address->delete();
+                }
+    
+                // Eliminar el usuario asociado al empleado, si existe
+                if ($employee->user) {
+                    $employee->user->delete();
+                }
+    
+                // Finalmente, eliminar el empleado
+                $employee->delete();
+    
+                // Devolver un mensaje de éxito
+                return 'Empleado eliminado con éxito';
+            } catch (Exception $e) {
+                // Revertir la transacción en caso de error
+                throw new Exception($e->getMessage());
+            }
+        });
+    }
+
 }

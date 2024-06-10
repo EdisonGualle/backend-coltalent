@@ -2,6 +2,7 @@
 
 namespace App\Models\Employee;
 
+use App\Models\Employee\Backgrounds\Publication;
 use App\Models\Employee\Backgrounds\WorkExperience;
 use App\Models\Employee\Backgrounds\WorkReference;
 use App\Models\Employee\Education\FormalEducation;
@@ -12,9 +13,7 @@ use Illuminate\Notifications\Notifiable;
 
 use App\Models\Employee\PersonalInfo\Address;
 use App\Models\Employee\PersonalInfo\Contact;
-use App\Models\Organization\Department;
 use App\Models\Organization\Position;
-use App\Models\Organization\Unit;
 use App\Models\User;
 
 class Employee extends Model
@@ -62,26 +61,15 @@ class Employee extends Model
     // Obtener la foto del usuario
     public function userPhoto()
     {
-        return $this->user->photo;
+        return $this->user()->select('photo')->first()->photo ?? null;
     }
-
+    
     // Relacion con user 1 - 1
     public function user()
     {
         return $this->hasOne(User::class);
     }
 
-    //Relacion con department 1 - 1
-    public function department()
-    {
-        return $this->hasOne(Department::class);
-    }
-
-    //Relacion con unit 1 - 1
-    public function unit()
-    {
-        return $this->hasOne(Unit::class);
-    }
     //Relacion con Address 1 - 1
     public function address()
     {
@@ -101,19 +89,19 @@ class Employee extends Model
     }
 
     //Relacion con Training 1-n 
-    public function training()
+    public function trainings()
     {
         return $this->hasMany(Training::class);
     }
 
     //Relacion con FormalEducation 1-n
-    public function formalEducation()
+    public function formalEducations()
     {
         return $this->hasMany(FormalEducation::class);
     }
 
     //Relacion con WorkExperience 1-n
-    public function workExperience()
+    public function workExperiences()
     {
         return $this->hasMany(WorkExperience::class);
     }
@@ -122,6 +110,12 @@ class Employee extends Model
     public function workReferences()
     {
         return $this->hasMany(WorkReference::class);
+    }
+
+    //Relacion con Publications 1-n
+    public function publications()
+    {
+        return $this->hasMany(Publication::class);
     }
 
     //Busquedas

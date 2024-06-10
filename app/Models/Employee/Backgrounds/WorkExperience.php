@@ -10,6 +10,8 @@ class WorkExperience extends Model
 {
     use HasFactory;
 
+    protected $table = 'employee_work_experiences';
+
     protected $fillable = [
         'from',
         'to',

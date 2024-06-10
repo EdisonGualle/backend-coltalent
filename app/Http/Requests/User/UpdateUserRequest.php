@@ -34,7 +34,7 @@ class UpdateUserRequest extends FormRequest
                     $fail('No puedes cambiar tu asociación con el empleado.');
                 }
             }],
-            'role_id' => ['nullable', 'exists:roles,id', function ($attribute, $value, $fail) use ($userId, $authUserId, $user) {
+            'role_id' => ['nullable', 'exists:user_roles,id', function ($attribute, $value, $fail) use ($userId, $authUserId, $user) {
                 if ($userId == $authUserId && $value != $user->role_id) {
                     $fail('No puedes cambiar tu propio rol.');
                 }

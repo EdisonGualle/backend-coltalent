@@ -4,25 +4,23 @@ namespace App\Models\Organization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Unit extends Model
+class Direction extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'name',
         'function',
-        'phone',
-        'direction_id', 
     ];
 
     protected $hidden = [
         'created_at', 
         'updated_at'
     ];
-
-    // Relación con dirección 1-n
-    public function direction() {
-        return $this->belongsTo(Direction::class);
+    
+    // Relación con unidades 1-n
+    public function units() {
+        return $this->hasMany(Unit::class);
     }
 
     // Relación con posiciones 1-n
@@ -30,7 +28,7 @@ class Unit extends Model
         return $this->hasMany(Position::class);
     }
 
-    // Relación con el jefe de la unidad
+    // Relación con el jefe de la dirección
     public function manager()
     {
         return $this->hasOne(Position::class)->where('is_manager', 1);
@@ -39,6 +37,6 @@ class Unit extends Model
     // Relación con el empleado que ocupa la posición de jefe
     public function managerEmployee()
     {
-        return $this->manager()->with('employee'); 
+        return $this->manager()->with('employee');
     }
 }

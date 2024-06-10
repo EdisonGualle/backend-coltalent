@@ -10,6 +10,7 @@ class WorkReference extends Model
 {
     use HasFactory;
 
+    protected $table = 'employee_work_references';
     protected $fillable = [
         'name',
         'position',

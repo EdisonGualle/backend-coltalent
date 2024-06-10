@@ -10,6 +10,8 @@ class Training extends Model
 {
     use HasFactory;
 
+    protected $table = 'employee_trainings';
+
     protected $fillable = [
         'institution',
         'topic',

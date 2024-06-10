@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Organization;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Organization\CreatePositionRequest;
+use App\Http\Requests\Organization\UpdatePositionRequest;
 use App\Services\Organization\PositionService;
-use Illuminate\Http\Request;
 
 class PositionController extends Controller
 {
-    
     private $positionService;
 
     public function __construct(PositionService $positionService)
@@ -21,9 +21,9 @@ class PositionController extends Controller
         return $this->positionService->getAllPositions();
     }
 
-    public function store(Request $request)
+    public function store(CreatePositionRequest $request)
     {
-        return $this->positionService->createPosition($request->all());
+        return $this->positionService->createPosition($request->validated());
     }
 
     public function show(string $id)
@@ -31,9 +31,9 @@ class PositionController extends Controller
         return $this->positionService->getPositionById($id);
     }
 
-    public function update(Request $request, string $id)
+    public function update(UpdatePositionRequest $request, string $id)
     {
-        return $this->positionService->updatePosition($id, $request->all());
+        return $this->positionService->updatePosition($id, $request->validated());
     }
 
     public function destroy(string $id)

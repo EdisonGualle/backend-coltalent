@@ -23,13 +23,14 @@ class UserService
 
         return [
             'full_name' => $user->employee->getFullNameAttribute(),
-            'personal_phone' => $user->employee->contact->personal_phone,
-            'personal_email' => $user->employee->contact->personal_email,
-            'photo' => $user->photo,
+            'personal_phone' => $user->employee->contact->personal_phone ?? null,
+            'personal_email' => $user->employee->contact->personal_email ?? null,
+            'photo' => $user->photo ?? null,
             'name' => $user->name,
             'email' => $user->email,
         ];
     }
+    
     public function getAllUsers()
     {
         $users = User::with('userState', 'role', 'employee')->get();

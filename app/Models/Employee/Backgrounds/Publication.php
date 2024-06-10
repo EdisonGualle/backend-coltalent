@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 class Publication extends Model
 {
     use HasFactory;
+    
+    protected $table = 'employee_publications';
 
     protected $fillable = [
         'publication_type_id',

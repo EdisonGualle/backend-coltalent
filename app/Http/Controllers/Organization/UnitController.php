@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Organization;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Organization\CreateUnitRequest;
+use App\Http\Requests\Organization\UpdateUnitRequest;
 use App\Services\Organization\UnitService;
-use Illuminate\Http\Request;
 
 class UnitController extends Controller
 {
-    
-    
     private $unitService;
 
     public function __construct(UnitService $unitService)
@@ -22,10 +21,9 @@ class UnitController extends Controller
         return $this->unitService->getAllUnits();
     }
 
-    
-    public function store(Request $request)
+    public function store(CreateUnitRequest $request)
     {
-        return $this->unitService->createUnit($request->all());
+        return $this->unitService->createUnit($request->validated());
     }
 
     public function show(string $id)
@@ -33,12 +31,10 @@ class UnitController extends Controller
         return $this->unitService->getUnitById($id);
     }
 
-
-    public function update(Request $request, string $id)
+    public function update(UpdateUnitRequest $request, string $id)
     {
-        return $this->unitService->updateUnit($id, $request->all());
+        return $this->unitService->updateUnit($id, $request->validated());
     }
-
 
     public function destroy(string $id)
     {

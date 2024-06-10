@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models\Organization;
 
 use App\Models\Employee\Employee;
@@ -13,7 +12,10 @@ class Position extends Model
     protected $fillable = [
         'name', 
         'function', 
-        'unit_id'
+        'unit_id', 
+        'direction_id',
+        'is_manager',
+        'is_general_manager', 
     ];
 
     protected $hidden = [
@@ -21,13 +23,19 @@ class Position extends Model
         'updated_at'
     ];
 
-    // Relacion con unidad 1-n
-    public function unit(){
+    public function unit()
+    {
         return $this->belongsTo(Unit::class);
     }
 
+    public function direction()
+    {
+        return $this->belongsTo(Direction::class);
+    }
 
-    public function employees(){
-        return $this->hasOne(Employee::class);
+    // Corregir la relación a employee en singular
+    public function employee()
+    {
+        return $this->hasOne(Employee::class, 'position_id');
     }
 }
