@@ -3,7 +3,7 @@
 namespace App\Models\Employee\Backgrounds;
 
 use App\Models\Employee\Employee;
-use App\Models\Other\PublicationType;
+use App\Models\Employee\Backgrounds\PublicationType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 

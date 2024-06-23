@@ -12,25 +12,30 @@ class StoreTrainingRequest extends FormRequest
             'institution' => 'required|string|max:255',
             'topic' => 'required|string|max:255',
             'year' => 'required|integer|min:1990|lte:' . date('Y'),
-            'num_hours' => 'required|integer|min:1',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'attendance' => 'required|numeric|min:0|max:100',
-            'approval' => 'nullable|string|max:255',
+            'num_hours' => 'required|integer|min:1|max:1000',
+            'training_type_id' => 'required|exists:training_types,id',
         ];
     }
 
     public function messages()
     {
         return [
+            'institution.required' => 'La institución es obligatoria.',
+            'institution.string' => 'La institución debe ser una cadena de texto.',
+            'institution.max' => 'La institución no debe exceder los 255 caracteres.',
+            'topic.required' => 'El tema es obligatorio.',
+            'topic.string' => 'El tema debe ser una cadena de texto.',
+            'topic.max' => 'El tema no debe exceder los 255 caracteres.',
+            'year.required' => 'El año es obligatorio.',
+            'year.integer' => 'El año debe ser un número entero.',
             'year.min' => 'El año debe ser mayor o igual a 1990.',
             'year.lte' => 'El año no puede ser mayor que el año actual.',
+            'num_hours.required' => 'El número de horas es obligatorio.',
+            'num_hours.integer' => 'El número de horas debe ser un número entero.',
             'num_hours.min' => 'El número de horas debe ser un valor positivo.',
-            'start_date.required' => 'La fecha de inicio es obligatoria.',
-            'end_date.required' => 'La fecha de finalización es obligatoria.',
-            'end_date.after' => 'La fecha de finalización debe ser posterior a la fecha de inicio.',
-            'attendance.min' => 'La asistencia no puede ser negativa.',
-            'attendance.max' => 'La asistencia no puede ser mayor al 100%.',
+            'num_hours.max' => 'El número de horas no debe exceder los 1000.',
+            'training_type_id.required' => 'El tipo de capacitación es obligatorio.',
+            'training_type_id.exists' => 'El tipo de capacitación seleccionado no es válido.',
         ];
     }
 }

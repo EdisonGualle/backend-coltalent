@@ -2,6 +2,7 @@
 
 namespace App\Models\Employee;
 
+use App\Models\Employee\Backgrounds\Language;
 use App\Models\Employee\Backgrounds\Publication;
 use App\Models\Employee\Backgrounds\WorkExperience;
 use App\Models\Employee\Backgrounds\WorkReference;
@@ -13,6 +14,8 @@ use Illuminate\Notifications\Notifiable;
 
 use App\Models\Employee\PersonalInfo\Address;
 use App\Models\Employee\PersonalInfo\Contact;
+use App\Models\Leave\Leave;
+use App\Models\Leave\LeaveComment;
 use App\Models\Organization\Position;
 use App\Models\User;
 
@@ -44,6 +47,7 @@ class Employee extends Model
         'updated_at'
     ];
 
+
     // Obtener el nombre completo del empleado
     public function getFullNameAttribute()
     {
@@ -58,12 +62,29 @@ class Employee extends Model
         return $Name !== '' ? $Name : null;
     }
 
+
+    // Relación con Leave
+    public function leaves()
+    {
+        return $this->hasMany(Leave::class);
+    }
+
+    // Relación con LeaveComment como commentedBy
+    public function comments()
+    {
+        return $this->hasMany(LeaveComment::class, 'commented_by');
+    }
+
+
+
+
+
     // Obtener la foto del usuario
     public function userPhoto()
     {
         return $this->user()->select('photo')->first()->photo ?? null;
     }
-    
+
     // Relacion con user 1 - 1
     public function user()
     {
@@ -116,6 +137,13 @@ class Employee extends Model
     public function publications()
     {
         return $this->hasMany(Publication::class);
+    }
+
+    // Relacion con idiomas 1-n  un empleado tiene muchos idiomas
+
+    public function languages()
+    {
+        return $this->hasMany(Language::class);
     }
 
     //Busquedas

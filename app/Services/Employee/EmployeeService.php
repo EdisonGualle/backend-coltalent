@@ -19,6 +19,7 @@ class EmployeeService
             ->get()
             ->map(function ($employee) {
                 $employee->full_name = $employee->getFullNameAttribute();
+                $employee->employee_name = $employee->getNameAttribute();
                 $employee->photo = $employee->userPhoto();
                 unset ($employee->contact_id, $employee->address_id, $employee->position_id);
                 return $employee;
@@ -31,14 +32,25 @@ class EmployeeService
     public function getEmployeeById($id)
     {
         $employee = Employee::with('contact', 'address', 'position')->findOrFail($id);
-
+    
         $employeeArray = $employee->toArray();
         $employeeArray['full_name'] = $employee->getFullNameAttribute();
-        $employeeArray['photo'] = $employee->userPhoto();
+        $employeeArray['employee_name'] = $employee->getNameAttribute();
+        $employeeArray['photo'] = $employee->userPhoto() ?: null; // Devolver null si userPhoto es null o vacío
+        $employeeArray['email'] = optional($employee->user)->email; // Manejar el caso donde el usuario pueda ser null
+    
+        // Manejar posibles nulos en las relaciones
+        $employeeArray['contact'] = optional($employee->contact)->toArray();
+        $employeeArray['address'] = optional($employee->address)->toArray();
+        $employeeArray['position'] = optional($employee->position)->toArray();
+    
+        // Eliminar claves innecesarias
         unset($employeeArray['contact_id'], $employeeArray['address_id'], $employeeArray['position_id']);
-
+    
         return $employeeArray;
     }
+    
+    
 
     public function createEmployee($request)
     {

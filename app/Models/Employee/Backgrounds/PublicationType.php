@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Models\Other;
+namespace App\Models\Employee\Backgrounds;
 
-use App\Models\Employee\Backgrounds\Publication;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class PublicationType extends Model
 {
+   
     use HasFactory;
 
     protected $fillable = [

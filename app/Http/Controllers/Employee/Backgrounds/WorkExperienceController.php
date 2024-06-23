@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Employee\Backgrounds;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Employee\Backgrounds\StoreWorkExperienceRequest;
 use App\Http\Requests\Employee\Backgrounds\UpdateWorkExperienceRequest;
-use App\Models\Employee\Employee;
 use App\Services\Employee\Backgrounds\WorkExperienceService;
 use Illuminate\Http\JsonResponse;
 

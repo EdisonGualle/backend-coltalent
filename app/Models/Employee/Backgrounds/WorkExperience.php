@@ -17,13 +17,16 @@ class WorkExperience extends Model
         'to',
         'position',
         'institution',
-        'responsabilities',
+        'responsibilities',
         'activities',
         'functions',
         'departure_reason',
-        'glade',
+        'note',
         'employee_id',
     ];
+
+    // Deshabilitar timestamps automáticos
+    // public $timestamps = false;
 
     protected $hidden = [
         'created_at', 

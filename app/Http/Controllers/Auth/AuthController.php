@@ -9,10 +9,6 @@ use App\Services\Auth\AuthenticationService;
 use App\Services\Config\ConfigurationService;
 use App\Utilities\TimeUtility;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
-
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
@@ -34,7 +30,7 @@ class AuthController extends Controller
     {
         $maxAttempts = $this->configService->getMaxAttempts();
         $lockoutTime = $this->configService->getLockoutTime();
-
+    
         $result = $this->authService->authenticate(
             $request->input('user'),
             $request->input('email'),
@@ -42,8 +38,13 @@ class AuthController extends Controller
             $maxAttempts,
             $lockoutTime
         );
-
+    
         if ($result['successful']) {
+            // Encontrar el usuario autenticado
+            $user = User::find($result['id']);
+            // Cargar el empleado relacionado
+            $employee = $user->employee;
+    
             return response()->json([
                 'status' => true,
                 'msg' => $result['message'],
@@ -55,6 +56,10 @@ class AuthController extends Controller
                     'state' => $result['state'],
                     'role' => $result['role'],
                     'token' => $result['token'],
+                    // Datos del empleado
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->getNameAttribute(),
+                    'employee_photo' => $employee->userPhoto(),
                 ]
             ], 200);
         } else {
@@ -64,6 +69,7 @@ class AuthController extends Controller
             ], 401);
         }
     }
+    
 
     public function logout(Request $request)
     {
@@ -71,5 +77,4 @@ class AuthController extends Controller
         return response()->json(['mensaje' => 'Sesión cerrada correctamente'], 200);
     }
 
-  
 }

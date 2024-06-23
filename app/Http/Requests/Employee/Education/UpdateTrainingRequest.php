@@ -12,24 +12,27 @@ class UpdateTrainingRequest extends FormRequest
             'institution' => 'string|max:255',
             'topic' => 'string|max:255',
             'year' => 'integer|min:1990|lte:' . date('Y'),
-            'num_hours' => 'integer|min:0|max:1000',
-            'start_date' => 'date',
-            'end_date' => 'date|after_or_equal:start_date',
-            'attendance' => 'numeric|min:0|max:100',
-            'approval' => 'string|max:255',
+            'num_hours' => 'integer|min:1|max:1000',
+            'training_type_id' => 'exists:training_types,id',
+            'employee_id' => 'exists:employees,id',
         ];
     }
+
     public function messages()
     {
         return [
+            'institution.string' => 'La institución debe ser una cadena de texto.',
+            'institution.max' => 'La institución no debe exceder los 255 caracteres.',
+            'topic.string' => 'El tema debe ser una cadena de texto.',
+            'topic.max' => 'El tema no debe exceder los 255 caracteres.',
+            'year.integer' => 'El año debe ser un número entero.',
             'year.min' => 'El año debe ser mayor o igual a 1990.',
             'year.lte' => 'El año no puede ser mayor que el año actual.',
+            'num_hours.integer' => 'El número de horas debe ser un número entero.',
             'num_hours.min' => 'El número de horas debe ser un valor positivo.',
-            'start_date.required' => 'La fecha de inicio es obligatoria.',
-            'end_date.required' => 'La fecha de finalización es obligatoria.',
-            'end_date.after' => 'La fecha de finalización debe ser posterior a la fecha de inicio.',
-            'attendance.min' => 'La asistencia no puede ser negativa.',
-            'attendance.max' => 'La asistencia no puede ser mayor al 100%.',
+            'num_hours.max' => 'El número de horas no debe exceder los 1000.',
+            'training_type_id.exists' => 'El tipo de capacitación seleccionado no es válido.',
+            'employee_id.exists' => 'El ID del empleado seleccionado no es válido.',
         ];
     }
 }

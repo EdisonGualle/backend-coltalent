@@ -17,20 +17,27 @@ class Training extends Model
         'topic',
         'year',
         'num_hours',
-        'start_date',
-        'end_date',
-        'attendance',
-        'approval',
+        'training_type_id',
         'employee_id'
     ];
 
     protected $hidden = [
         'created_at', 
-        'updated_at'
+        'updated_at',
+        'training_type_id',
     ];
 
+    // Deshabilitar timestamps automáticos
+    public $timestamps = false;
+
+    
     //Relacion de n-1
     public function employee(){
         return $this->belongsTo(Employee::class);
+    }
+
+    //Relacion de n-1
+    public function trainingType(){
+        return $this->belongsTo(TrainingType::class, 'training_type_id');
     }
 }

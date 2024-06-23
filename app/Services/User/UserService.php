@@ -174,6 +174,8 @@ class UserService
 
         return [
             'id' => $user->id,
+            'employee_id' => $user->employee_id,
+            'employee_name' => $user->employee->getNameAttribute(),
             'name' => $user->name,
             'email' => $user->email,
             'photo' => $user->photo,

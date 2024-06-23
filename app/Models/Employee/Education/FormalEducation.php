@@ -9,15 +9,14 @@ use Illuminate\Database\Eloquent\Model;
 class FormalEducation extends Model
 {
     use HasFactory;
+
     protected $table = 'employee_formal_educations';
     protected $fillable = [
-        'level',
+        'level_id',
         'institution',
-        'place',
         'title',
         'specialization',
-        'level_number',
-        'status',
+        'state_id',
         'date',
         'registration',
         'employee_id'
@@ -28,8 +27,18 @@ class FormalEducation extends Model
         'updated_at'
     ];
 
-    //Relacion de n-1
+    // Relación de n-1 con Employee
     public function employee(){
         return $this->belongsTo(Employee::class);
+    }
+
+    // Relación de n-1 con EducationLevel
+    public function educationLevel(){
+        return $this->belongsTo(EducationLevel::class, 'level_id');
+    }
+
+    // Relación de n-1 con EducationState
+    public function educationState(){
+        return $this->belongsTo(EducationState::class, 'state_id');
     }
 }
