@@ -75,10 +75,6 @@ class Employee extends Model
         return $this->hasMany(LeaveComment::class, 'commented_by');
     }
 
-
-
-
-
     // Obtener la foto del usuario
     public function userPhoto()
     {

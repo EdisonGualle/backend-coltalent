@@ -6,7 +6,6 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreEmployeeRequest extends FormRequest
 {
-    
     public function rules()
     {
         return [
@@ -26,7 +25,7 @@ class StoreEmployeeRequest extends FormRequest
             'employee.military_id' => 'string',
             // Contact - tabla
             'employee.position_id' => 'required|numeric|exists:positions,id',
-            'employee.contact.personal_email' => 'required|email|unique:contacts,personal_email,',
+            'employee.contact.personal_email' => 'required|email|unique:employee_contacts,personal_email,',
             'employee.contact.personal_phone' => 'digits:10',
             'employee.contact.home_phone' => 'digits:10',
             'employee.contact.work_phone' => 'digits:10',

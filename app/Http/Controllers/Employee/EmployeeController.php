@@ -38,27 +38,28 @@ class EmployeeController extends Controller
             return $this->respondWithError('Error al obtener el empleado: ' . $e->getMessage(), 500);
         }
     }
-
     public function store(StoreEmployeeRequest $request)
     {
         try {
-            $employee = $this->employeeService->createEmployee($request->all());
-            return $this->respondWithSuccess('Empleado creado exitosamente.', $employee, 201);
+            $employee = $this->employeeService->createEmployee($request);
+            return $this->respondWithSuccess('Empleado creado exitosamente.', $employee->toArray(), 201);
         } catch (Exception $e) {
             return $this->respondWithError('Error al crear el empleado: ' . $e->getMessage(), 500);
         }
     }
+    
+    
 
     public function update(UpdateEmployeeRequest $request, $id)
     {
         try {
             $employee = $this->employeeService->updateEmployee($id, $request->validated());
-            return $this->respondWithSuccess('Empleado actualizado exitosamente.', $employee);
+            return $this->respondWithSuccess('Empleado actualizado exitosamente.', $employee->toArray());
         } catch (Exception $e) {
             return $this->respondWithError('Error al actualizar el empleado: ' . $e->getMessage(), 500);
         }
     }
-
+    
     public function destroy($id)
     {
         try {

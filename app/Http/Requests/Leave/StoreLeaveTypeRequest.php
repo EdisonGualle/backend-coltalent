@@ -18,22 +18,30 @@ class StoreLeaveTypeRequest extends FormRequest
             'description' => 'required|string|max:500',
             'max_duration' => [
                 'nullable',
-                'string',
                 function ($attribute, $value, $fail) {
-                    if (!preg_match('/^(0?[0-9]|1[0-9]|2[0-3]|24):([0-5][0-9])$/', $value)) {
-                        $fail('El formato de la duración máxima es incorrecto.');
-                        return;
-                    }
                     if ($this->input('time_unit') === 'Días') {
                         if (!preg_match('/^\d+$/', $value)) {
-                            $fail('El formato de la duración máxima es incorrecto.');
-                        } elseif ((int)$value > 30) {
-                            $fail('La duración máxima en días no puede exceder los 30 días.');
+                            $fail('El formato de la duración máxima en días es incorrecto.');
+                        } elseif ((int)$value < 1 || (int)$value > 30) {
+                            $fail('La duración máxima en días debe estar entre 1 y 30 días.');
+                        }
+                    } elseif ($this->input('time_unit') === 'Horas') {
+                        if (!preg_match('/^(0?[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$/', $value)) {
+                            $fail('El formato de la duración máxima en horas es incorrecto.');
+                        } else {
+                            // Convertir a minutos para validar el rango
+                            list($hours, $minutes) = explode(':', $value);
+                            $totalMinutes = $hours * 60 + $minutes;
+                            $minMinutes = 30; // 00:30
+                            $maxMinutes = 450; // 07:30
+                            if ($totalMinutes < $minMinutes || $totalMinutes > $maxMinutes) {
+                                $fail('La duración máxima en horas debe estar entre 00:30 y 07:30 horas.');
+                            }
                         }
                     }
                 },
             ],
-            'requires_document' => 'nullable|in:Si,No',
+            'requires_document' => 'required|in:Si,No',
             'advance_notice_days' => 'required|integer|min:1|max:10',
             'time_unit' => 'nullable|in:Días,Horas',
         ];
@@ -61,7 +69,7 @@ class StoreLeaveTypeRequest extends FormRequest
             'description.string' => 'La descripción debe ser una cadena de texto.',
             'description.max' => 'La descripción no puede exceder los 500 caracteres.',
             'max_duration.required' => 'La duración máxima es obligatoria cuando la unidad de tiempo está presente.',
-            'max_duration.string' => 'El campo max duration debe ser una cadena de caracteres.',
+            'max_duration.string' => 'El campo duración máxima debe ser una cadena de caracteres.',
             'requires_document.in' => 'El campo de requerir documento debe ser "Si" o "No".',
             'advance_notice_days.required' => 'El aviso previo es obligatorio.',
             'advance_notice_days.integer' => 'El aviso previo debe ser un número entero.',

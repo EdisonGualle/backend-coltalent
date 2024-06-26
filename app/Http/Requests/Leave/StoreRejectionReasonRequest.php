@@ -10,7 +10,7 @@ class StoreRejectionReasonRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'reason' => 'required|string|max:255|unique:rejection_reasons,reason',
+            'reason' => 'required|string|max:100|unique:rejection_reasons,reason',
         ];
     }
 
@@ -19,7 +19,7 @@ class StoreRejectionReasonRequest extends FormRequest
         return [
             'reason.required' => 'El motivo de rechazo es obligatorio.',
             'reason.string' => 'El motivo de rechazo debe ser una cadena de texto.',
-            'reason.max' => 'El motivo de rechazo no puede exceder los 255 caracteres.',
+            'reason.max' => 'El motivo de rechazo no puede exceder los 100 caracteres.',
             'reason.unique' => 'El motivo de rechazo ya existe.',
         ];
     }

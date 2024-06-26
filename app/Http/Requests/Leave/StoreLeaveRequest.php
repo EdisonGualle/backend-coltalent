@@ -15,7 +15,8 @@ class StoreLeaveRequest extends FormRequest
             'leave_type_id' => 'required|exists:leave_types,id',
             'start_date' => ['required', 'date', 'after_or_equal:today'],
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'duration_hours' => ['nullable', 'regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'start_time' => 'nullable|date_format:H:i',
+            'end_time' => 'nullable|date_format:H:i|after:start_time',
             'reason' => 'required|string|max:255',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,png,jpg,doc,docx,xls,xlsx|max:2048',
         ];
@@ -27,14 +28,17 @@ class StoreLeaveRequest extends FormRequest
             $data = $this->all();
             $leaveType = LeaveType::find($data['leave_type_id']);
 
-            // Validar que se proporcione end_date o duration_hours, pero no ambos
-            if (empty($data['end_date']) && empty($data['duration_hours'])) {
+            // Validar que se proporcione end_date o (start_time y end_time), pero no ambos
+            if (empty($data['end_date']) && (empty($data['start_time']) || empty($data['end_time']))) {
                 $validator->errors()->add('end_date', 'Debe proporcionar una fecha de finalización o una duración en horas.');
-                $validator->errors()->add('duration_hours', 'Debe proporcionar una fecha de finalización o una duración en horas.');
+                $validator->errors()->add('start_time', 'Debe proporcionar una hora de inicio y fin si no se proporciona una fecha de finalización.');
+                $validator->errors()->add('end_time', 'Debe proporcionar una hora de inicio y fin si no se proporciona una fecha de finalización.');
             }
 
-            if (!empty($data['end_date']) && !empty($data['duration_hours'])) {
+            if (!empty($data['end_date']) && (!empty($data['start_time']) || !empty($data['end_time']))) {
                 $validator->errors()->add('end_date', 'No puede proporcionar tanto la fecha de finalización como la duración en horas.');
+                $validator->errors()->add('start_time', 'No puede proporcionar tanto la fecha de finalización como la duración en horas.');
+                $validator->errors()->add('end_time', 'No puede proporcionar tanto la fecha de finalización como la duración en horas.');
             }
 
             // Validar la duración máxima basada en el tipo de permiso
@@ -51,21 +55,26 @@ class StoreLeaveRequest extends FormRequest
                     } else {
                         $validator->errors()->add('end_date', "Debe proporcionar una fecha de finalización para permisos en días.");
                     }
-                    if (!empty($data['duration_hours'])) {
-                        $validator->errors()->add('duration_hours', "No puede proporcionar duración en horas para permisos en días.");
+                    if (!empty($data['start_time']) || !empty($data['end_time'])) {
+                        $validator->errors()->add('start_time', "No puede proporcionar horas de inicio y fin para permisos en días.");
+                        $validator->errors()->add('end_time', "No puede proporcionar horas de inicio y fin para permisos en días.");
                     }
                 } elseif ($leaveType->time_unit == 'Horas') {
-                    if (!empty($data['duration_hours'])) {
+                    if (!empty($data['start_time']) && !empty($data['end_time'])) {
+                        $startTime = new \DateTime($data['start_time']);
+                        $endTime = new \DateTime($data['end_time']);
+                        $interval = $startTime->diff($endTime);
+                        $requestedMinutes = ($interval->h * 60) + $interval->i;
+
                         list($maxHours, $maxMinutes) = explode(':', $leaveType->max_duration);
-                        $maxDurationMinutes = $maxHours * 60 + $maxMinutes;
-                        list($hours, $minutes) = explode(':', $data['duration_hours']);
-                        $requestedMinutes = $hours * 60 + $minutes;
+                        $maxDurationMinutes = ($maxHours * 60) + $maxMinutes;
 
                         if ($requestedMinutes > $maxDurationMinutes) {
-                            $validator->errors()->add('duration_hours', "La duración máxima permitida para este tipo de permiso es de {$leaveType->max_duration} horas.");
+                            $validator->errors()->add('end_time', "La duración máxima permitida para este tipo de permiso es de {$leaveType->max_duration} horas.");
                         }
                     } else {
-                        $validator->errors()->add('duration_hours', "Debe proporcionar una duración en horas para permisos en horas.");
+                        $validator->errors()->add('start_time', "Debe proporcionar una hora de inicio y fin para permisos en horas.");
+                        $validator->errors()->add('end_time', "Debe proporcionar una hora de inicio y fin para permisos en horas.");
                     }
                     if (!empty($data['end_date'])) {
                         $validator->errors()->add('end_date', "No puede proporcionar fecha de finalización para permisos en horas.");
@@ -82,13 +91,11 @@ class StoreLeaveRequest extends FormRequest
                     $validator->errors()->add('start_date', "Debe solicitar el permiso con al menos {$advanceNoticeDays} días de anticipación.");
                 }
 
-
-                 // Validar si se requiere un documento adjunto
-                 if ($leaveType->requires_document === 'Si' && empty($data['attachment'])) {
+                // Validar si se requiere un documento adjunto
+                if ($leaveType->requires_document === 'Si' && empty($data['attachment'])) {
                     $validator->errors()->add('attachment', 'Este tipo de permiso requiere un documento adjunto.');
                 }
             }
-
 
             // Validar que no haya un permiso en curso, futuro aprobado, o pendiente de aprobación
             $employeeId = $this->route('employee');
@@ -110,13 +117,10 @@ class StoreLeaveRequest extends FormRequest
                 })
                 ->exists();
 
-            // Validar dependiendo del tipo de permiso (por horas o por días)
             if ($overlappingApprovedLeaves) {
+                $validator->errors()->add('start_date', 'Ya tiene un permiso aprobado que cubre el período seleccionado.');
                 if (!empty($data['end_date'])) {
-                    $validator->errors()->add('start_date', 'Ya tiene un permiso aprobado que cubre el período seleccionado.');
                     $validator->errors()->add('end_date', 'Ya tiene un permiso aprobado que cubre el período seleccionado.');
-                } else {
-                    $validator->errors()->add('start_date', 'Ya tiene un permiso aprobado que cubre el período seleccionado.');
                 }
             }
 
@@ -128,11 +132,9 @@ class StoreLeaveRequest extends FormRequest
                 ->exists();
 
             if ($overlappingPendingLeaves) {
+                $validator->errors()->add('start_date', 'Tiene un permiso pendiente de aprobación.');
                 if (!empty($data['end_date'])) {
-                    $validator->errors()->add('start_date', 'Tiene un permiso pendiente de aprobación.');
                     $validator->errors()->add('end_date', 'Tiene un permiso pendiente de aprobación.');
-                } else {
-                    $validator->errors()->add('start_date', 'Tiene un permiso pendiente de aprobación.');
                 }
             }
         });
@@ -148,7 +150,9 @@ class StoreLeaveRequest extends FormRequest
             'start_date.after_or_equal' => 'La fecha de inicio no puede ser una fecha pasada.',
             'end_date.date' => 'La fecha de finalización debe ser una fecha válida.',
             'end_date.after_or_equal' => 'La fecha de finalización debe ser igual o posterior a la fecha de inicio.',
-            'duration_hours.regex' => 'La duración en horas debe estar en el formato hh:mm.',
+            'start_time.date_format' => 'La hora de inicio debe estar en el formato HH:mm.',
+            'end_time.date_format' => 'La hora de finalización debe estar en el formato HH:mm.',
+            'end_time.after' => 'La hora de finalización debe ser posterior a la hora de inicio.',
             'reason.required' => 'La razón del permiso es obligatoria.',
             'reason.string' => 'La razón del permiso debe ser una cadena de texto.',
             'reason.max' => 'La razón del permiso no puede exceder los 255 caracteres.',

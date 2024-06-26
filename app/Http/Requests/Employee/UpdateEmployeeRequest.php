@@ -11,7 +11,7 @@ class UpdateEmployeeRequest extends FormRequest
     {
         return [
             'employee.identification' => 'digits:10|unique:employees,identification,',
-            'employee.passport' => ' digits:12|unique:employees,passport,',
+            'employee.passport' => 'digits:12|unique:employees,passport,',
             'employee.first_name' => 'string',
             'employee.second_name' => 'string',
             'employee.last_name' => 'string',
@@ -24,7 +24,7 @@ class UpdateEmployeeRequest extends FormRequest
             'employee.nationality' => 'string',
             'employee.military_id' => 'string',
             'employee.position_id' => 'numeric|exists:positions,id',
-            'employee.contact.personal_email' => 'email|unique:contacts,personal_email,',
+            'employee.contact.personal_email' => 'email|unique:employee_contacts,personal_email,',
             'employee.contact.personal_phone' => 'digits:10',
             'employee.contact.home_phone' => 'digits:10',
             'employee.contact.work_phone' => 'digits:10',

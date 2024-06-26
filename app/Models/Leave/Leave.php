@@ -15,7 +15,8 @@ class Leave extends Model
         'leave_type_id', 
         'start_date', 
         'end_date', 
-        'duration_hours', 
+        'start_time',
+        'end_time', 
         'reason', 
         'attachment',
         'state_id'
