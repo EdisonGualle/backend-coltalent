@@ -45,17 +45,24 @@ class LeaveController extends Controller
     }
 
 
-     // Nueva función para actualizar una solicitud de permiso
-     public function update(Request $request, int $employee_id, int $leave_id): JsonResponse
-     {
-         $data = $request->validate([
-             'start_date' => 'date',
-             'end_date' => 'date|after_or_equal:start_date',
-             'duration_hours' => 'nullable|integer',
-             'reason' => 'string|max:255',
-         ]);
- 
-         return $this->leaveService->updateLeave($employee_id, $leave_id, $data);
-     }
-    
+    // Nueva función para actualizar una solicitud de permiso
+    public function update(Request $request, int $employee_id, int $leave_id): JsonResponse
+    {
+        $data = $request->validate([
+            'start_date' => 'date',
+            'end_date' => 'date|after_or_equal:start_date',
+            'duration_hours' => 'nullable|integer',
+            'reason' => 'string|max:255',
+        ]);
+
+        return $this->leaveService->updateLeave($employee_id, $leave_id, $data);
+    }
+
+    // Nueva función para obtener las estadísticas de permisos
+    public function getLeaveStatistics(int $employee_id): JsonResponse
+    {
+        return $this->leaveService->getLeaveStatistics($employee_id);
+    }
+
+
 }

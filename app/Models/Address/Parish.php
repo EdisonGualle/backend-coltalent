@@ -11,7 +11,7 @@ class Parish extends Model
 
     protected $fillable = [
         'name',
-        'canton_id'
+        'cantons_id'
     ];
     public $timestamps = false;
 

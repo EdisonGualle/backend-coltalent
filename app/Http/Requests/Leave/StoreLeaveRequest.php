@@ -18,7 +18,7 @@ class StoreLeaveRequest extends FormRequest
             'start_time' => 'nullable|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
             'reason' => 'required|string|max:255',
-            'attachment' => 'nullable|file|mimes:pdf,jpeg,png,jpg,doc,docx,xls,xlsx|max:2048',
+            'attachment' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:5048',
         ];
     }
 
@@ -28,18 +28,7 @@ class StoreLeaveRequest extends FormRequest
             $data = $this->all();
             $leaveType = LeaveType::find($data['leave_type_id']);
 
-            // Validar que se proporcione end_date o (start_time y end_time), pero no ambos
-            if (empty($data['end_date']) && (empty($data['start_time']) || empty($data['end_time']))) {
-                $validator->errors()->add('end_date', 'Debe proporcionar una fecha de finalización o una duración en horas.');
-                $validator->errors()->add('start_time', 'Debe proporcionar una hora de inicio y fin si no se proporciona una fecha de finalización.');
-                $validator->errors()->add('end_time', 'Debe proporcionar una hora de inicio y fin si no se proporciona una fecha de finalización.');
-            }
-
-            if (!empty($data['end_date']) && (!empty($data['start_time']) || !empty($data['end_time']))) {
-                $validator->errors()->add('end_date', 'No puede proporcionar tanto la fecha de finalización como la duración en horas.');
-                $validator->errors()->add('start_time', 'No puede proporcionar tanto la fecha de finalización como la duración en horas.');
-                $validator->errors()->add('end_time', 'No puede proporcionar tanto la fecha de finalización como la duración en horas.');
-            }
+         
 
             // Validar la duración máxima basada en el tipo de permiso
             if ($leaveType) {
@@ -52,13 +41,8 @@ class StoreLeaveRequest extends FormRequest
                         if ($interval > (int) $leaveType->max_duration) {
                             $validator->errors()->add('end_date', "La duración máxima permitida para este tipo de permiso es de {$leaveType->max_duration} días.");
                         }
-                    } else {
-                        $validator->errors()->add('end_date', "Debe proporcionar una fecha de finalización para permisos en días.");
-                    }
-                    if (!empty($data['start_time']) || !empty($data['end_time'])) {
-                        $validator->errors()->add('start_time', "No puede proporcionar horas de inicio y fin para permisos en días.");
-                        $validator->errors()->add('end_time', "No puede proporcionar horas de inicio y fin para permisos en días.");
-                    }
+                    } 
+                   
                 } elseif ($leaveType->time_unit == 'Horas') {
                     if (!empty($data['start_time']) && !empty($data['end_time'])) {
                         $startTime = new \DateTime($data['start_time']);
@@ -72,13 +56,7 @@ class StoreLeaveRequest extends FormRequest
                         if ($requestedMinutes > $maxDurationMinutes) {
                             $validator->errors()->add('end_time', "La duración máxima permitida para este tipo de permiso es de {$leaveType->max_duration} horas.");
                         }
-                    } else {
-                        $validator->errors()->add('start_time', "Debe proporcionar una hora de inicio y fin para permisos en horas.");
-                        $validator->errors()->add('end_time', "Debe proporcionar una hora de inicio y fin para permisos en horas.");
-                    }
-                    if (!empty($data['end_date'])) {
-                        $validator->errors()->add('end_date', "No puede proporcionar fecha de finalización para permisos en horas.");
-                    }
+                    } 
                 }
 
                 // Validar el aviso previo de días de anticipación
@@ -157,8 +135,8 @@ class StoreLeaveRequest extends FormRequest
             'reason.string' => 'La razón del permiso debe ser una cadena de texto.',
             'reason.max' => 'La razón del permiso no puede exceder los 255 caracteres.',
             'attachment.file' => 'El archivo adjunto debe ser un archivo válido.',
-            'attachment.mimes' => 'El archivo adjunto debe ser de tipo: pdf, jpeg, png, jpg, doc, docx, xls, xlsx.',
-            'attachment.max' => 'El archivo adjunto no debe superar los 2048 kilobytes.',
+            'attachment.mimes' => 'El archivo adjunto debe ser de tipo: pdf, jpeg, png, jpg.',
+            'attachment.max' => 'El archivo adjunto no debe superar los 5MB.',
         ];
     }
 }

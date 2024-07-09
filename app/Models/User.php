@@ -39,14 +39,6 @@ class User extends Authenticatable
         return 'username';
     }
 
-    public function scopeFilter($query, array $filters)
-    {
-        $query->when($filters['search'] ?? false, function ($query, $search) {
-            return $query->where('name', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%');
-            // Puedes agregar más campos aquí según tus necesidades
-        });
-    }
 
     // Relacion con employee 1 - 1
     public function employee()
@@ -63,4 +55,21 @@ class User extends Authenticatable
     public function role(){
         return $this->belongsTo(Role::class);
     }
+
+     // Relación con Notification 1 - n
+     public function notifications()
+     {
+         return $this->hasMany(Notification::class);
+     }
+
+
+     public function scopeFilter($query, array $filters)
+     {
+         $query->when($filters['search'] ?? false, function ($query, $search) {
+             return $query->where('name', 'like', '%' . $search . '%')
+                         ->orWhere('email', 'like', '%' . $search . '%');
+             // Puedes agregar más campos aquí según tus necesidades
+         });
+     }
+ 
 }

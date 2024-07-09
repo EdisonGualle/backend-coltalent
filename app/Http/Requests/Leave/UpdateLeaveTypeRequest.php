@@ -42,6 +42,7 @@ class UpdateLeaveTypeRequest extends FormRequest
             'requires_document' => 'nullable|in:Si,No',
             'advance_notice_days' => 'nullable|integer|min:1|max:10',
             'time_unit' => 'nullable|in:Días,Horas',
+            'icon' => 'string|max:30'
         ];
     }
 

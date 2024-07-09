@@ -44,6 +44,7 @@ class StoreLeaveTypeRequest extends FormRequest
             'requires_document' => 'required|in:Si,No',
             'advance_notice_days' => 'required|integer|min:1|max:10',
             'time_unit' => 'nullable|in:Días,Horas',
+            'icon' => 'required|string|max:30'
         ];
     }
 
@@ -77,6 +78,9 @@ class StoreLeaveTypeRequest extends FormRequest
             'advance_notice_days.max' => 'El aviso previo no puede exceder los 10 días.',
             'time_unit.required' => 'La unidad de tiempo es obligatoria cuando la duración máxima está presente.',
             'time_unit.in' => 'La unidad de tiempo debe ser "Días" o "Horas".',
+            'icon.required' => 'El icono es obligatorio.',
+            'icon.string' => 'El icono debe ser una cadena de texto.',
+            'icon.max' => 'El icono no puede exceder los 30 caracteres.'
         ];
     }
 }

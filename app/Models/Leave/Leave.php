@@ -5,6 +5,7 @@ namespace App\Models\Leave;
 use App\Models\Employee\Employee;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class Leave extends Model
 {
@@ -41,4 +42,16 @@ class Leave extends Model
     {
         return $this->hasMany(LeaveComment::class);
     }
+
+    // Mutators to format created_at and updated_at
+    public function getCreatedAtAttribute($value)
+    {
+        return Carbon::parse($value)->format('d/m/Y');
+    }
+
+    public function getUpdatedAtAttribute($value)
+    {
+        return Carbon::parse($value)->format('d/m/Y');
+    }
+
 }

@@ -30,7 +30,7 @@ class LeaveCommentController extends Controller
         if ($data['action'] === 'Rechazado' && !isset($data['rejection_reason_id'])) {
             return response()->json([
                 'status' => false,
-                'msg' => 'El campo rejection_reason_id es obligatorio cuando la acción es Rechazado'
+                'msg' => 'El motivo de rechazo es obligatorio'
             ], 422);
         }
     
