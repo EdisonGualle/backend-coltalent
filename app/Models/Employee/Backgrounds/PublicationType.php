@@ -15,6 +15,8 @@ class PublicationType extends Model
         'description'
     ];
 
+    public $timestamps = false;
+
     protected $hidden = [
         'created_at', 
         'updated_at'

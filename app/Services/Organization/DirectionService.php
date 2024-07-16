@@ -11,9 +11,11 @@ class DirectionService extends ResponseService
 {
     private function formatDirectionData(Direction $direction): array
     {
+        $isActive = is_null($direction->deleted_at) ? 'Activo' : 'Inactivo';
         return array_merge(
             $direction->only('id', 'name', 'function'),
-            [
+            [ 
+                'status' => $isActive, 
                 'manager' => $direction->manager && $direction->manager->employee ? [
                     'id' => $direction->manager->employee->id,
                     'name' => $direction->manager->employee->name,
@@ -23,15 +25,23 @@ class DirectionService extends ResponseService
         );
     }
 
-    public function getAllDirections(): JsonResponse
+    public function getAllDirections(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $directions = Direction::with('manager.employee')
-                ->get()
-                ->map(function ($direction) {
-                    return $this->formatDirectionData($direction);
-                });
+            // Inicia la consulta preparada para incluir relaciones relevantes
+            $query = Direction::with(['manager.employee']);
 
+            // Condiciona la inclusión de registros eliminados lógicamente
+            if ($includeDeleted) {
+                $query->withTrashed(); // Incluye los registros eliminados lógicamente
+            }
+
+            // Ejecuta la consulta y formatea cada dirección
+            $directions = $query->get()->map(function ($direction) {
+                return $this->formatDirectionData($direction);
+            });
+
+            // Devuelve una respuesta exitosa con las direcciones obtenidas
             return $this->successResponse('Lista de direcciones obtenida con éxito', $directions, 200);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de direcciones: ' . $e->getMessage(), 500);
@@ -86,4 +96,26 @@ class DirectionService extends ResponseService
             return $this->errorResponse('No se pudo eliminar la dirección: ' . $e->getMessage(), 500);
         }
     }
+
+    public function toggleDirectionStatus(string $id): JsonResponse
+    {
+        try {
+            $direction = Direction::withTrashed()->findOrFail($id);  // Busca incluyendo los eliminados lógicamente
+
+            if ($direction->trashed()) {
+                $direction->restore();  // Restaura si está eliminada
+                $message = 'Dirección activada con éxito';
+            } else {
+                $direction->delete();  // Elimina lógicamente si está activa
+                $message = 'Dirección desactivada con éxito';
+            }
+
+            // Devuelve una respuesta JSON indicando el éxito de la operación
+            return $this->successResponse($message, $this->formatDirectionData($direction), 200);
+        } catch (\Exception $e) {
+            // Maneja cualquier excepción y devuelve un error
+            return $this->errorResponse('Error al cambiar el estado de la dirección: ' . $e->getMessage(), 500);
+        }
+    }
+
 }

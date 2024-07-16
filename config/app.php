@@ -169,6 +169,7 @@ return [
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         Illuminate\Translation\TranslationServiceProvider::class,
+        Laravel\Sanctum\SanctumServiceProvider::class,
     ])->toArray(),
 
     /*

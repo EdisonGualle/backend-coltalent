@@ -31,7 +31,6 @@ use App\Http\Controllers\User\UserStateController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
-
 Route::post('login', [AuthController::class, 'login']);
 Route::post('forgot-password', [ResetPasswordController::class, "changePassword"]);
 Route::get('employees/{employee}/leave-statistics/export', [LeaveExportController::class, 'export']);
@@ -58,6 +57,19 @@ Route::middleware('auth:sanctum')->group(function () {
         'units' => UnitController::class,
         'positions' => PositionController::class,
     ], );
+
+    // Organización
+    Route::get('/org-directions-all', [DirectionController::class, 'indexIncludingDeleted']);
+    Route::post('/org-directions/toggle-status/{id}', [DirectionController::class, 'toggleStatus']);
+
+    // Unidades
+    Route::get('/units-all', [UnitController::class, 'indexIncludingDeleted']);
+    Route::post('/units/toggle-status/{id}', [UnitController::class, 'toggleStatus']);
+
+    // Posiciones
+    Route::get('/positions-all', [PositionController::class, 'indexIncludingDeleted']);
+    Route::post('/positions/toggle-status/{id}', [PositionController::class, 'toggleStatus']);
+
 
     // Estados de educación
     Route::get('education/states', [EducationStateController::class, 'index']);
@@ -97,6 +109,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
         Route::get('states', [LeaveStateController::class, 'index']);
         Route::get('states/{id}', [LeaveStateController::class, 'show']);
+        // Rutas específicas para las razones de rechazo
+        Route::get('rejection-reasons-all', [RejectionReasonController::class, 'indexIncludingDeleted']);
+        Route::post('rejection-reasons/toggle-status/{id}', [RejectionReasonController::class, 'toggleStatus']);
+        //Rutas específicas para los tipos de permisos
+        Route::get('types-all', [LeaveTypeController::class, 'indexIncludingDeleted']);
+        Route::post('types/toggle-status/{id}', [LeaveTypeController::class, 'toggleStatus']);
     });
 
 

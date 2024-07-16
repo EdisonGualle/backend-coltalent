@@ -28,6 +28,9 @@ class Publication extends Model
         'publication_type_id'
     ];
 
+    public $timestamps = false;
+
+
 
     public function publicationType()
     {

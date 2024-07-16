@@ -40,4 +40,14 @@ class LeaveTypeController extends Controller
     {
         return $this->leaveTypeService->deleteLeaveType($id);
     }
+    
+    public function indexIncludingDeleted()
+    {
+        return $this->leaveTypeService->getAllLeaveTypes(true);
+    }
+
+    public function toggleStatus(string $id)
+    {
+        return $this->leaveTypeService->toggleLeaveTypeStatus($id);
+    }
 }

@@ -10,9 +10,11 @@ class UnitService extends ResponseService
 {
     private function formatUnitData(Unit $unit): array
     {
+        $isActive = is_null($unit->deleted_at) ? 'Activo' : 'Inactivo'; 
         return array_merge(
             $unit->only('id', 'name', 'function', 'phone'),
             [
+                'status' => $isActive,
                 'direction' => $unit->direction ? $unit->direction->toArray() : null,
                 'manager' => $unit->manager && $unit->manager->employee ? [
                     'id' => $unit->manager->employee->id,
@@ -23,21 +25,21 @@ class UnitService extends ResponseService
         );
     }
 
-    public function getAllUnits(): JsonResponse
+    public function getAllUnits(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $units = Unit::with('direction', 'manager.employee')
-                ->get()
-                ->map(function ($unit) {
-                    return $this->formatUnitData($unit);
-                });
-
+            $query = Unit::with('direction', 'manager.employee');
+            if ($includeDeleted) {
+                $query->withTrashed();
+            }
+            $units = $query->get()->map(function ($unit) {
+                return $this->formatUnitData($unit);
+            });
             return $this->successResponse('Lista de unidades obtenida con éxito', $units, 200);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de unidades: ' . $e->getMessage(), 500);
         }
     }
-
     public function createUnit(array $data): JsonResponse
     {
         try {
@@ -88,4 +90,23 @@ class UnitService extends ResponseService
             return $this->errorResponse('No se pudo eliminar la unidad', 500);
         }
     }
+
+
+    public function toggleUnitStatus(string $id): JsonResponse
+    {
+        try {
+            $unit = Unit::withTrashed()->findOrFail($id);
+            if ($unit->trashed()) {
+                $unit->restore();
+                $message = 'Unidad activada con éxito';
+            } else {
+                $unit->delete();
+                $message = 'Unidad desactivada con éxito';
+            }
+            return $this->successResponse($message, $this->formatUnitData($unit), 200);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Error al cambiar el estado de la unidad: ' . $e->getMessage(), 500);
+        }
+    }
+
 }

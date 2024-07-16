@@ -21,6 +21,12 @@ class PositionController extends Controller
         return $this->positionService->getAllPositions();
     }
 
+    // Obtener todas las posiciones, incluyendo las inactivas
+    public function indexIncludingDeleted()
+    {
+        return $this->positionService->getAllPositions(true);
+    }
+
     public function store(CreatePositionRequest $request)
     {
         return $this->positionService->createPosition($request->validated());
@@ -39,5 +45,11 @@ class PositionController extends Controller
     public function destroy(string $id)
     {
         return $this->positionService->deletePosition($id);
+    }
+
+    // Alternar el estado de activación de una posición
+    public function toggleStatus(string $id)
+    {
+        return $this->positionService->togglePositionStatus($id);
     }
 }

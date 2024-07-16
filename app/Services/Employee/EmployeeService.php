@@ -127,7 +127,7 @@ class EmployeeService
 
 
                 // Disparar el evento EmployeeCreated
-                event(new EmployeeCreated($employee, $generatedPassword));
+                 event(new EmployeeCreated($employee, $generatedPassword));
 
                 return $employee;
             } catch (Exception $e) {

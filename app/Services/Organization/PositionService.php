@@ -10,9 +10,11 @@ class PositionService extends ResponseService
 {
     private function formatPositionData(Position $position): array
     {
+        $isActive = is_null($position->deleted_at) ? 'Activo' : 'Inactivo'; 
         return array_merge(
             $position->only('id', 'name', 'function', 'is_manager', 'is_general_manager'),
             [
+                'status' => $isActive,
                 'unit' => $position->unit ? [
                     'id' => $position->unit->id,
                     'name' => $position->unit->name,
@@ -25,15 +27,16 @@ class PositionService extends ResponseService
         );
     }
 
-    public function getAllPositions(): JsonResponse
+    public function getAllPositions(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $positions = Position::with('unit:id,name', 'direction:id,name')
-                ->get()
-                ->map(function ($position) {
-                    return $this->formatPositionData($position);
-                });
-
+            $query = Position::with('unit:id,name', 'direction:id,name');
+            if ($includeDeleted) {
+                $query->withTrashed();
+            }
+            $positions = $query->get()->map(function ($position) {
+                return $this->formatPositionData($position);
+            });
             return $this->successResponse('Lista de posiciones obtenida con éxito', $positions);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de posiciones: ' . $e->getMessage(), 500);
@@ -88,4 +91,23 @@ class PositionService extends ResponseService
             return $this->errorResponse('No se pudo eliminar la posición', 500);
         }
     }
+
+    public function togglePositionStatus(string $id): JsonResponse
+    {
+        try {
+            $position = Position::withTrashed()->findOrFail($id);
+            if ($position->trashed()) {
+                $position->restore();
+                $message = 'Posición activada con éxito';
+            } else {
+                $position->delete();
+                $message = 'Posición desactivada con éxito';
+            }
+            return $this->successResponse($message, $this->formatPositionData($position), 200);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Error al cambiar el estado de la posición: ' . $e->getMessage(), 500);
+        }
+    }
+
+    
 }

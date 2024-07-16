@@ -22,6 +22,8 @@ class Address extends Model
         'parish_id'
     ];
 
+    public $timestamps = false;
+    
     protected $hidden = [
         'created_at', 
         'updated_at'

@@ -21,6 +21,12 @@ class UnitController extends Controller
         return $this->unitService->getAllUnits();
     }
 
+     // Obtener todas las unidades, incluyendo las inactivas
+     public function indexIncludingDeleted()
+     {
+         return $this->unitService->getAllUnits(true);
+     }
+     
     public function store(CreateUnitRequest $request)
     {
         return $this->unitService->createUnit($request->validated());
@@ -40,4 +46,10 @@ class UnitController extends Controller
     {
         return $this->unitService->deleteUnit($id);
     }
+
+     // Alternar el estado de activación de una unidad
+     public function toggleStatus(string $id)
+     {
+         return $this->unitService->toggleUnitStatus($id);
+     }
 }

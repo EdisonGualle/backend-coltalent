@@ -27,6 +27,8 @@ class FormalEducation extends Model
         'updated_at'
     ];
 
+    public $timestamps = false;
+
     // Relación de n-1 con Employee
     public function employee(){
         return $this->belongsTo(Employee::class);

@@ -11,6 +11,8 @@ class UserState extends Model
     use HasFactory;
     protected $fillable = ['name'];
 
+    public $timestamps = false;
+
     protected $hidden = [
         'created_at', 
         'updated_at'

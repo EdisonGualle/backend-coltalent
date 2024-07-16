@@ -18,6 +18,8 @@ class LeaveState extends Model
         'updated_at'
     ];
 
+    public $timestamps = false;
+
 
     // Relación con Leave
     public function leaves()

@@ -18,6 +18,7 @@ class Contact extends Model
         'work_phone',
     ];
 
+    public $timestamps = false;
 
     protected $hidden = ['created_at', 'updated_at'];
 

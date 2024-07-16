@@ -3,10 +3,10 @@ namespace App\Models\Organization;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use Illuminate\Database\Eloquent\SoftDeletes; 
 class Direction extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -17,6 +17,9 @@ class Direction extends Model
         'created_at', 
         'updated_at'
     ];
+    
+    // Añade deleted_at a las fechas para manejarlas automáticamente
+    protected $dates = ['deleted_at'];
     
     // Relación con unidades 1-n
     public function units() {

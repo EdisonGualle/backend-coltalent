@@ -21,6 +21,13 @@ class RejectionReasonController extends Controller
         return $this->rejectionReasonService->getAllRejectionReasons();
     }
 
+    // Obtener todas las razones de rechazo, incluyendo las inactivas
+    public function indexIncludingDeleted()
+    {
+        return $this->rejectionReasonService->getAllRejectionReasons(true);
+    }
+
+
     public function store(StoreRejectionReasonRequest $request)
     {
         return $this->rejectionReasonService->createRejectionReason($request->validated());
@@ -40,4 +47,10 @@ class RejectionReasonController extends Controller
     {
         return $this->rejectionReasonService->deleteRejectionReason($rejection_reason);
     }
+
+      // Alternar el estado de activación de una razón de rechazo
+      public function toggleStatus(string $id)
+      {
+          return $this->rejectionReasonService->toggleRejectionReasonStatus($id);
+      }
 }

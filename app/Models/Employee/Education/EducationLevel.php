@@ -11,6 +11,8 @@ class EducationLevel extends Model
 
     protected $table = 'education_levels';
     protected $fillable = ['name'];
+    
+    public $timestamps = false;
 
     protected $hidden = [
         'created_at', 

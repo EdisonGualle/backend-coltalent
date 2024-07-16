@@ -16,6 +16,9 @@ class EducationState extends Model
         'created_at', 
         'updated_at'
     ];
+    
+    public $timestamps = false;
+
 
     // Relación de 1-n con FormalEducation
     public function formalEducations(){

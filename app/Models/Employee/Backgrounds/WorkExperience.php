@@ -26,7 +26,7 @@ class WorkExperience extends Model
     ];
 
     // Deshabilitar timestamps automáticos
-    // public $timestamps = false;
+    public $timestamps = false;
 
     protected $hidden = [
         'created_at', 

@@ -12,6 +12,8 @@ class Training extends Model
 
     protected $table = 'employee_trainings';
 
+    
+
     protected $fillable = [
         'institution',
         'topic',
