@@ -16,6 +16,9 @@ use App\Services\ResponseService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use App\Mail\LeaveRequestedMail;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\ApprovalNotificationMail;
 
 class LeaveService extends ResponseService
 {
@@ -101,6 +104,10 @@ class LeaveService extends ResponseService
             // Crear la notificación para el primer aprobador
             $this->createPendingNotification($leave, $approverId);
 
+            // Enviar correo al empleado solicitante
+            $approver = Employee::findOrFail($approverId);
+            Mail::to($employee->user->email)->send(new LeaveRequestedMail($employee, $leave, $approver));
+
 
             DB::commit();
 
@@ -141,6 +148,9 @@ class LeaveService extends ResponseService
         ]);
 
         event(new NotificationEvent($notification));
+
+        // Enviar el correo electrónico al aprobador
+    Mail::to($user->email)->send(new ApprovalNotificationMail($approver, $leave, $leave->employee));
     }
 
     public function updateLeave(int $employee_id, int $leave_id, array $data): JsonResponse
@@ -236,8 +246,8 @@ class LeaveService extends ResponseService
                 default:
                     break;
             }
-               // Ordenar los resultados por el id en orden descendente
-               $query->orderBy('id', 'desc');
+            // Ordenar los resultados por el id en orden descendente
+            $query->orderBy('id', 'desc');
 
             $leaves = $query->with([
                 'employee:id,identification,position_id,first_name,second_name,last_name,second_last_name',
@@ -245,9 +255,17 @@ class LeaveService extends ResponseService
                 'employee.position.unit:id,name,direction_id',
                 'employee.position.unit.direction:id,name',
                 'employee.position.direction:id,name',
-                'leaveType:id,name',
+                'leaveType' => function ($query) {
+                    $query->withTrashed()->select('id', 'name');
+                },
                 'state:id,name',
-                'comments.rejectionReason',
+                'comments' => function ($query) {
+                    $query->with([
+                        'rejectionReason' => function ($query) {
+                            $query->withTrashed();
+                        }
+                    ]);
+                },
                 'comments.commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
                 'comments.commentedBy.position:id,name'
             ])->get();
@@ -384,10 +402,18 @@ class LeaveService extends ResponseService
             $query->orderBy('id', 'desc');
 
             $leaves = $query->with([
-                'leaveType:id,name',
+                'leaveType' => function ($query) {
+                    $query->withTrashed()->select('id', 'name');
+                },
                 'state',
                 'comments',
-                'comments.rejectionReason',
+                'comments' => function ($query) {
+                    $query->with([
+                        'rejectionReason' => function ($query) {
+                            $query->withTrashed();
+                        }
+                    ]);
+                },
                 'comments.commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
                 'comments.commentedBy.position:id,name'
             ])->get();
@@ -473,78 +499,78 @@ class LeaveService extends ResponseService
         }
     }
 
+    // Obtener las estadísticas de permisos de un empleado
 // Obtener las estadísticas de permisos de un empleado
-// Obtener las estadísticas de permisos de un empleado
-public function getLeaveStatistics(int $employee_id): JsonResponse
-{
-    try {
-        $totalPermissions = Leave::where('employee_id', $employee_id)->count();
-        $approvedPermissions = Leave::where('employee_id', $employee_id)->whereHas('state', function ($q) {
-            $q->where('name', 'Aprobado');
-        })->count();
-        $disapprovedPermissions = Leave::where('employee_id', $employee_id)->whereHas('state', function ($q) {
-            $q->where('name', 'Rechazado');
-        })->count();
+    public function getLeaveStatistics(int $employee_id): JsonResponse
+    {
+        try {
+            $totalPermissions = Leave::where('employee_id', $employee_id)->count();
+            $approvedPermissions = Leave::where('employee_id', $employee_id)->whereHas('state', function ($q) {
+                $q->where('name', 'Aprobado');
+            })->count();
+            $disapprovedPermissions = Leave::where('employee_id', $employee_id)->whereHas('state', function ($q) {
+                $q->where('name', 'Rechazado');
+            })->count();
 
-        $leaveTypes = LeaveType::all();
-        $leaveTypeDurations = [];
+            $leaveTypes = LeaveType::all();
+            $leaveTypeDurations = [];
 
-        foreach ($leaveTypes as $leaveType) {
-            $leaveTypeDurationInDays = 0;
-            $leaveTypeDurationInHours = 0;
-            $leaveTypeDurationInMinutes = 0;
+            foreach ($leaveTypes as $leaveType) {
+                $leaveTypeDurationInDays = 0;
+                $leaveTypeDurationInHours = 0;
+                $leaveTypeDurationInMinutes = 0;
 
-            $leaves = Leave::where('employee_id', $employee_id)
-                ->where('leave_type_id', $leaveType->id)
-                ->whereHas('state', function ($q) {
-                    $q->where('name', 'Aprobado');
-                })
-                ->get();
+                $leaves = Leave::where('employee_id', $employee_id)
+                    ->where('leave_type_id', $leaveType->id)
+                    ->whereHas('state', function ($q) {
+                        $q->where('name', 'Aprobado');
+                    })
+                    ->get();
 
-            foreach ($leaves as $leave) {
-                if ($leave->start_date && $leave->end_date) {
-                    $start_date = new \DateTime($leave->start_date);
-                    $end_date = new \DateTime($leave->end_date);
-                    $interval = $start_date->diff($end_date);
-                    $days = $interval->days + 1; // Incluye el último día
-                    $leaveTypeDurationInDays += $days;
-                } elseif ($leave->start_time && $leave->end_time) {
-                    $start_time = new \DateTime($leave->start_time);
-                    $end_time = new \DateTime($leave->end_time);
-                    $interval = $start_time->diff($end_time);
-                    $hours = $interval->h;
-                    $minutes = $interval->i;
-                    $leaveTypeDurationInHours += $hours;
-                    $leaveTypeDurationInMinutes += $minutes;
+                foreach ($leaves as $leave) {
+                    if ($leave->start_date && $leave->end_date) {
+                        $start_date = new \DateTime($leave->start_date);
+                        $end_date = new \DateTime($leave->end_date);
+                        $interval = $start_date->diff($end_date);
+                        $days = $interval->days + 1; // Incluye el último día
+                        $leaveTypeDurationInDays += $days;
+                    } elseif ($leave->start_time && $leave->end_time) {
+                        $start_time = new \DateTime($leave->start_time);
+                        $end_time = new \DateTime($leave->end_time);
+                        $interval = $start_time->diff($end_time);
+                        $hours = $interval->h;
+                        $minutes = $interval->i;
+                        $leaveTypeDurationInHours += $hours;
+                        $leaveTypeDurationInMinutes += $minutes;
+                    }
                 }
+
+                // Convertir minutos adicionales en horas
+                $additionalHours = intdiv($leaveTypeDurationInMinutes, 60);
+                $remainingMinutes = $leaveTypeDurationInMinutes % 60;
+                $leaveTypeDurationInHours += $additionalHours;
+
+                // Formatear en HH:MM
+                $totalDurationFormatted = sprintf('%02d:%02d', $leaveTypeDurationInHours, $remainingMinutes);
+
+                $leaveTypeDurations[$leaveType->name] = [
+                    'total_in_days' => $leaveTypeDurationInDays,
+                    'total_in_hours' => $totalDurationFormatted,
+                ];
             }
 
-            // Convertir minutos adicionales en horas
-            $additionalHours = intdiv($leaveTypeDurationInMinutes, 60);
-            $remainingMinutes = $leaveTypeDurationInMinutes % 60;
-            $leaveTypeDurationInHours += $additionalHours;
-
-            // Formatear en HH:MM
-            $totalDurationFormatted = sprintf('%02d:%02d', $leaveTypeDurationInHours, $remainingMinutes);
-
-            $leaveTypeDurations[$leaveType->name] = [
-                'total_in_days' => $leaveTypeDurationInDays,
-                'total_in_hours' => $totalDurationFormatted,
+            $data = [
+                'totalPermissions' => $totalPermissions,
+                'approvedPermissions' => $approvedPermissions,
+                'disapprovedPermissions' => $disapprovedPermissions,
+                'leaveTypeDurations' => $leaveTypeDurations,
             ];
+
+            return $this->successResponse('Estadísticas de permisos obtenidas con éxito', $data);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Error al obtener las estadísticas de permisos: ' . $e->getMessage(), 500);
         }
-
-        $data = [
-            'totalPermissions' => $totalPermissions,
-            'approvedPermissions' => $approvedPermissions,
-            'disapprovedPermissions' => $disapprovedPermissions,
-            'leaveTypeDurations' => $leaveTypeDurations,
-        ];
-
-        return $this->successResponse('Estadísticas de permisos obtenidas con éxito', $data);
-    } catch (\Exception $e) {
-        return $this->errorResponse('Error al obtener las estadísticas de permisos: ' . $e->getMessage(), 500);
     }
-}
 
 
 }

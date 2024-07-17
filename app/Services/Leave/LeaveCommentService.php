@@ -13,7 +13,9 @@ use App\Services\ResponseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
+use App\Mail\LeaveActionNotificationMail;
+use App\Mail\PendingApprovalNotificationMail;
+use Illuminate\Support\Facades\Mail;
 
 class LeaveCommentService extends ResponseService
 {
@@ -50,6 +52,11 @@ class LeaveCommentService extends ResponseService
                 $this->createNotification($leave, $employee_id, $data['action']);
             }
 
+
+            if (in_array($data['action'], ['Aprobado', 'Rechazado'])) {
+                $this->sendActionNotificationEmail($leave, $employee_id, $data['action']);
+            }
+
             // Marcar las notificaciones de "Solicitud pendiente" como leídas
             $this->markNotificationsAsRead($leave->id, $employee_id);
 
@@ -61,6 +68,85 @@ class LeaveCommentService extends ResponseService
         }
     }
 
+
+    private function sendActionNotificationEmail(Leave $leave, int $approver_id, string $action)
+    {
+        $approver = Employee::findOrFail($approver_id);
+        $applicant = $leave->employee;
+
+        $approverName = $approver->full_name;
+        $actionDescription = match ($action) {
+            'Aprobado' => 'aprobado',
+            'Rechazado' => 'rechazado',
+            default => 'realizado una acción sobre',
+        };
+
+        // Determinar si es la primera aprobación, la aprobación final o un rechazo
+        $isRejection = $action === 'Rechazado';
+        $isFinalApproval = !$this->getNextApprover($leave, $approver_id) && !$isRejection;
+        $approvalStage = $isRejection ? 'Rechazo' : ($isFinalApproval ? 'Aprobación Final' : 'Primera Aprobación');
+        $headerColor = $isRejection ? 'red' : ($isFinalApproval ? 'green' : 'blue');
+        $subject = "Tu solicitud de permiso ha sido {$actionDescription} - {$approvalStage}";
+
+        // Datos adicionales para el correo
+        $nextApprover = $isRejection ? null : $this->getNextApprover($leave, $approver_id);
+        $evaluationDate = Carbon::now()->format('d/m/Y H:i');
+        $comment = $leave->comments()->where('commented_by', $approver_id)->orderBy('created_at', 'desc')->first()->comment ?? '';
+        $rejectionReason = $isRejection ? $leave->comments()->where('commented_by', $approver_id)->orderBy('created_at', 'desc')->first()->rejectionReason->reason ?? '' : '';
+
+        $mailData = [
+            'employeeName' => $applicant->getFullNameAttribute(),
+            'startDate' => $leave->start_date ? Carbon::parse($leave->start_date)->format('d/m/Y') : 'N/A',
+            'endDate' => $leave->end_date ? Carbon::parse($leave->end_date)->format('d/m/Y') : null,
+            'startTime' => $leave->start_time ? Carbon::parse($leave->start_time)->format('H:i') : null,
+            'endTime' => $leave->end_time ? Carbon::parse($leave->end_time)->format('H:i') : null,
+            'duration' => $this->calculateDuration($leave),
+            'leaveType' => $leave->leaveType->name,
+            'leaveReason' => $leave->reason,
+            'approverName' => $approverName,
+            'action' => $actionDescription,
+            'isFinalApproval' => $isFinalApproval,
+            'isRejection' => $isRejection,
+            'evaluationDate' => $evaluationDate,
+            'comment' => $comment,
+            'rejectionReason' => $rejectionReason,
+            'nextApprover' => $nextApprover ? $nextApprover->getFullNameAttribute() : null,
+            'headerColor' => $headerColor,
+        ];
+
+        Mail::to($applicant->user->email)->send(new LeaveActionNotificationMail($mailData, $subject));
+    }
+
+
+    // Añadir este método para calcular la duración del permiso
+    private function calculateDuration(Leave $leave)
+    {
+        if ($leave->start_date && $leave->end_date) {
+            $start_date = Carbon::parse($leave->start_date);
+            $end_date = Carbon::parse($leave->end_date);
+            $interval = $start_date->diff($end_date);
+            $days = $interval->days + 1; // Incluye el último día
+            return $days . ' ' . ($days > 1 ? 'días' : 'día');
+        } elseif ($leave->start_time && $leave->end_time) {
+            $start_time = Carbon::parse($leave->start_time);
+            $end_time = Carbon::parse($leave->end_time);
+            $interval = $start_time->diff($end_time);
+            $hours = $interval->h;
+            $minutes = $interval->i;
+            $duration = '';
+            if ($hours > 0) {
+                $duration .= $hours . ' ' . ($hours > 1 ? 'horas' : 'hora');
+            }
+            if ($minutes > 0) {
+                if ($hours > 0) {
+                    $duration .= ' y ';
+                }
+                $duration .= $minutes . ' ' . ($minutes > 1 ? 'minutos' : 'minuto');
+            }
+            return $duration;
+        }
+        return 'N/A';
+    }
 
     private function markNotificationsAsRead(int $leave_id, int $employee_id)
     {
@@ -83,10 +169,33 @@ class LeaveCommentService extends ResponseService
             $leave->update(['state_id' => $this->getStateId('Pendiente')]);
             $this->createNotification($leave, $employee_id, 'Primera aprobación');
             $this->createPendingNotification($leave, $nextApprover->id);
+            $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
         } else {
             $leave->update(['state_id' => $this->getStateId('Aprobado')]);
             $this->createNotification($leave, $employee_id, 'Aprobación final');
         }
+    }
+
+
+    private function sendPendingApprovalNotificationEmail(Leave $leave, Employee $nextApprover)
+    {
+        $applicant = $leave->employee;
+
+        $mailData = [
+            'approverName' => $nextApprover->getFullNameAttribute(),
+            'applicantName' => $applicant->getFullNameAttribute(),
+            'startDate' => $leave->start_date ? Carbon::parse($leave->start_date)->format('d/m/Y') : 'N/A',
+            'endDate' => $leave->end_date ? Carbon::parse($leave->end_date)->format('d/m/Y') : null,
+            'startTime' => $leave->start_time ? Carbon::parse($leave->start_time)->format('H:i') : null,
+            'endTime' => $leave->end_time ? Carbon::parse($leave->end_time)->format('H:i') : null,
+            'duration' => $this->calculateDuration($leave),
+            'leaveType' => $leave->leaveType->name,
+            'leaveReason' => $leave->reason,
+        ];
+
+        $subject = "Nueva Solicitud de Permiso Pendiente";
+
+        Mail::to($nextApprover->user->email)->send(new PendingApprovalNotificationMail($mailData, $subject));
     }
 
 
