@@ -3,6 +3,7 @@
 namespace App\Services\Leave;
 
 use App\Events\NotificationEvent;
+use App\Mail\ApproverActionNotificationMail;
 use App\Models\Leave\LeaveComment;
 use App\Models\Leave\Leave;
 use App\Models\Leave\LeaveState;
@@ -73,27 +74,28 @@ class LeaveCommentService extends ResponseService
     {
         $approver = Employee::findOrFail($approver_id);
         $applicant = $leave->employee;
-
+    
         $approverName = $approver->full_name;
         $actionDescription = match ($action) {
             'Aprobado' => 'aprobado',
             'Rechazado' => 'rechazado',
             default => 'realizado una acción sobre',
         };
-
+    
         // Determinar si es la primera aprobación, la aprobación final o un rechazo
         $isRejection = $action === 'Rechazado';
         $isFinalApproval = !$this->getNextApprover($leave, $approver_id) && !$isRejection;
         $approvalStage = $isRejection ? 'Rechazo' : ($isFinalApproval ? 'Aprobación Final' : 'Primera Aprobación');
         $headerColor = $isRejection ? 'red' : ($isFinalApproval ? 'green' : 'blue');
-        $subject = "Tu solicitud de permiso ha sido {$actionDescription} - {$approvalStage}";
-
+        $subjectApplicant = "Tu solicitud de permiso ha sido {$actionDescription} - {$approvalStage}";
+        $subjectApprover = "Notificación de Acción Realizada";
+    
         // Datos adicionales para el correo
         $nextApprover = $isRejection ? null : $this->getNextApprover($leave, $approver_id);
         $evaluationDate = Carbon::now()->format('d/m/Y H:i');
         $comment = $leave->comments()->where('commented_by', $approver_id)->orderBy('created_at', 'desc')->first()->comment ?? '';
         $rejectionReason = $isRejection ? $leave->comments()->where('commented_by', $approver_id)->orderBy('created_at', 'desc')->first()->rejectionReason->reason ?? '' : '';
-
+    
         $mailData = [
             'employeeName' => $applicant->getFullNameAttribute(),
             'startDate' => $leave->start_date ? Carbon::parse($leave->start_date)->format('d/m/Y') : 'N/A',
@@ -113,11 +115,11 @@ class LeaveCommentService extends ResponseService
             'nextApprover' => $nextApprover ? $nextApprover->getFullNameAttribute() : null,
             'headerColor' => $headerColor,
         ];
-
-        Mail::to($applicant->user->email)->send(new LeaveActionNotificationMail($mailData, $subject));
+    
+        Mail::to($applicant->user->email)->send(new LeaveActionNotificationMail($mailData, $subjectApplicant));
+        Mail::to($approver->user->email)->send(new ApproverActionNotificationMail($mailData, $subjectApprover));  // Nuevo correo al aprobador
     }
-
-
+    
     // Añadir este método para calcular la duración del permiso
     private function calculateDuration(Leave $leave)
     {
@@ -240,7 +242,7 @@ class LeaveCommentService extends ResponseService
         $approver = Employee::find($approver_id);
         $approverName = $approver ? $approver->full_name : 'Aprobador';
         $approverPhoto = $approver ? $approver->user->photo : null;
-        $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
+        $applicantPhoto = $leave->employee && $leave->employee->user && $leave->employee->user->photo ? $leave->employee->user->photo : null;        $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
 
         // Obtener el nombre del solicitante
         $applicant = Employee::find($leave->employee_id);
@@ -262,7 +264,7 @@ class LeaveCommentService extends ResponseService
                 'leave_id' => $leave->id,
                 'message' => $message,
                 'approver_id' => $approver_id,
-                'approver_photo' => $approverPhoto,
+                'applicant_photo' => $applicantPhoto,
             ],
         ]);
 

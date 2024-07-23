@@ -14,5 +14,12 @@ class Configuration extends Model
         'value',
         'description'
     ];
+    
+    public $timestamps = false;
+
+    protected $hidden = [
+        'created_at', 
+        'updated_at'
+    ];
 
 }

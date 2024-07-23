@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bienvenido a la Empresa</title>
+    <title>Bienvenido al GADMC Colta</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -73,7 +73,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h2>Bienvenido a la Empresa</h2>
+            <h2>Bienvenido al GADMC Colta</h2>
         </div>
         <div class="content">
             <p>Hola, <strong>{{ $employee->getFullNameAttribute() }}</strong></p>

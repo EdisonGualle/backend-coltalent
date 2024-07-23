@@ -138,32 +138,34 @@ class UserService
     public function updateUserPhoto($id, $photo)
     {
         $user = User::findOrFail($id);
-
+    
         $oldPhotoPath = $user->photo;
-
+    
         DB::beginTransaction();
         try {
             // Subir la nueva foto y obtener su ruta
             $newPhotoPath = $photo->store('users_photo', 'public');
-
+    
             // Asignar la nueva foto al usuario
             $user->photo = $newPhotoPath;
             $user->save();
-
+    
             // Eliminar la foto anterior si existe y es diferente a la nueva
             if ($oldPhotoPath && $oldPhotoPath !== $newPhotoPath) {
                 Storage::disk('public')->delete($oldPhotoPath);
             }
             DB::commit();
-          
-            return $user;
-
+    
+            return response()->json([
+                'photo' => $newPhotoPath
+            ]);
+    
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al actualizar la foto de perfil: ' . $e->getMessage());
         }
     }
-
+    
     public function getUserAuth()
     {
         $user = Auth::user();
@@ -187,6 +189,11 @@ class UserService
 
     public function disableUser($id)
     {
+        $currentUserId = auth()->id(); // Obtener el ID del usuario actual
+        if ($id == $currentUserId) {
+            throw new Exception('No se puede desactivar a sí mismo');
+        }
+    
         $user = User::findOrFail($id);
         $inactiveStateId = UserState::where('name', 'Inactivo')->firstOrFail()->id;
     
@@ -207,9 +214,10 @@ class UserService
             return $userData;
         } catch (Exception $e) {
             DB::rollBack();
-            throw $e;
+            throw new Exception('Error al desactivar el usuario: ' . $e->getMessage());
         }
     }
+    
     
     public function enableUser($id)
     {
@@ -260,5 +268,22 @@ class UserService
             throw new Exception('Error al eliminar el usuario: ' . $e->getMessage());
         }
     }
+
+
+    public function changePassword($userId, $currentPassword, $newPassword)
+{
+    $user = User::findOrFail($userId);
+
+    // Verificar la contraseña actual
+    if (!Hash::check($currentPassword, $user->password)) {
+        throw new Exception('La contraseña actual no es correcta.');
+    }
+
+    // Actualizar la contraseña
+    $user->password = Hash::make($newPassword);
+    $user->save();
+
+    return 'Contraseña actualizada correctamente.';
+}
 
 }

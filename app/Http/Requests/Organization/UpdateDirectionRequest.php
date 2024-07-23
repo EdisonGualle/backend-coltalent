@@ -9,7 +9,7 @@ class UpdateDirectionRequest extends FormRequest
     public function rules()
     {
         return [
-            'name' => 'string|max:255|unique:directions,name,' . $this->route('direction'),
+            'name' => 'string|max:255|unique:directions,name,' . $this->route('org_direction'),
             'function' => 'string|max:255',
         ];
     }

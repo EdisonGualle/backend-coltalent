@@ -8,6 +8,7 @@ use App\Http\Requests\User\UpdateUserRequest;
 use App\Services\User\UserService;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -121,6 +122,24 @@ class UserController extends Controller
             return $this->respondWithError('Error al obtener la configuración de usuario: ' . $e->getMessage(), 500);
         }
     }
+
+
+    public function changePassword(Request $request)
+{
+    // Validar la solicitud
+    $request->validate([
+        'current_password' => 'required',
+        'new_password' => 'required|min:8|confirmed',
+    ]);
+
+    try {
+        $message = $this->userService->changePassword(Auth::id(), $request->current_password, $request->new_password);
+        return $this->respondWithSuccess($message);
+    } catch (Exception $e) {
+        return $this->respondWithError($e->getMessage(), 500);
+    }
+}
+
 
     private function respondWithSuccess(string $message, $data = []): \Illuminate\Http\JsonResponse
     {

@@ -66,7 +66,7 @@ class EmployeeController extends Controller
             $this->employeeService->deleteEmployee($id);
             return $this->respondWithSuccess('Empleado eliminado exitosamente.', []);
         } catch (Exception $e) {
-            return $this->respondWithError('Error al eliminar el empleado: ' . $e->getMessage(), 500);
+            return $this->respondWithError( $e->getMessage(), 500);
         }
     }
 

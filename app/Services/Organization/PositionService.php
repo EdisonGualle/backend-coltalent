@@ -5,6 +5,7 @@ namespace App\Services\Organization;
 use App\Models\Organization\Position;
 use App\Services\ResponseService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class PositionService extends ResponseService
 {
@@ -30,19 +31,32 @@ class PositionService extends ResponseService
     public function getAllPositions(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $query = Position::with('unit:id,name', 'direction:id,name');
+            $query = Position::with([
+                'unit' => function ($query) use ($includeDeleted) {
+                    if ($includeDeleted) {
+                        $query->withTrashed();
+                    }
+                },
+                'direction' => function ($query) use ($includeDeleted) {
+                    if ($includeDeleted) {
+                        $query->withTrashed();
+                    }
+                }
+            ]);
+    
             if ($includeDeleted) {
                 $query->withTrashed();
             }
+    
             $positions = $query->get()->map(function ($position) {
                 return $this->formatPositionData($position);
             });
+    
             return $this->successResponse('Lista de posiciones obtenida con éxito', $positions);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de posiciones: ' . $e->getMessage(), 500);
         }
     }
-
     public function createPosition(array $data): JsonResponse
     {
         try {
@@ -55,14 +69,33 @@ class PositionService extends ResponseService
         }
     }
 
-    public function getPositionById(string $id): JsonResponse
+    public function getPositionById(string $id, bool $includeDeleted = false): JsonResponse
     {
         try {
-            $position = Position::with('unit:id,name', 'direction:id,name')->findOrFail($id);
-
+            $query = Position::with([
+                'unit' => function ($query) use ($includeDeleted) {
+                    if ($includeDeleted) {
+                        $query->withTrashed();
+                    }
+                },
+                'direction' => function ($query) use ($includeDeleted) {
+                    if ($includeDeleted) {
+                        $query->withTrashed();
+                    }
+                }
+            ]);
+    
+            if ($includeDeleted) {
+                $query->withTrashed();
+            }
+    
+            $position = $query->findOrFail($id);
+    
             return $this->successResponse('Detalles de la posición obtenidos con éxito', $this->formatPositionData($position));
-        } catch (\Exception $e) {
+        } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Posición no encontrada', 404);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Error al obtener la posición: ' . $e->getMessage(), 500);
         }
     }
 

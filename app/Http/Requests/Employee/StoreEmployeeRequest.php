@@ -40,6 +40,9 @@ class StoreEmployeeRequest extends FormRequest
             'employee.address.parish_id' => 'nullable|exists:parishes,id',
             // Position - tabla
             'employee.position_id' => ['required', 'numeric', 'exists:positions,id', new UniquePositionForActiveEmployees],
+
+             // Role - tabla
+             'user.role_id' => 'required|exists:user_roles,id',
         ];
     }
 
@@ -114,6 +117,10 @@ class StoreEmployeeRequest extends FormRequest
             'employee.position_id.numeric' => 'El cargo debe ser un valor numérico.',
             'employee.position_id.exists' => 'El cargo seleccionado no existe en el sistema. Por favor, seleccione un cargo válido.',
             'employee.position_id.unique' => 'Este cargo ya está asignado a un empleado activo.',
+
+            // Role - tabla
+            'user.role_id.required' => 'El rol es obligatorio. Por favor, seleccione un rol válido para el usuario.',
+            'user.role_id.exists' => 'El rol seleccionado no existe en el sistema. Por favor, seleccione un rol válido.',
         ];
     }
 }

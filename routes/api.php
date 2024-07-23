@@ -3,6 +3,8 @@
 use App\Http\Controllers\Address\AddressController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\ConfigurationController;
+use App\Http\Controllers\DashboardStatisticsController;
 use App\Http\Controllers\Employee\Backgrounds\LanguageController;
 use App\Http\Controllers\Employee\Backgrounds\PublicationController;
 use App\Http\Controllers\Employee\Backgrounds\PublicationTypeController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\Employee\EmployeeController;
 use App\Http\Controllers\Leave\LeaveCommentController;
 use App\Http\Controllers\Leave\LeaveController;
 use App\Http\Controllers\Leave\LeaveStateController;
+use App\Http\Controllers\Leave\LeaveStatisticsController;
 use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Leave\RejectionReasonController;
 use App\Http\Controllers\NotificationController;
@@ -37,6 +40,13 @@ Route::get('employees/{employee}/leave-statistics/export', [LeaveExportControlle
 
 
 
+Route::get('/statistics/aprobaciones/mes/{employeeId}', [LeaveStatisticsController::class, 'getAprobacionesPorMes']);
+Route::get('/statistics/aprobaciones/tipo/{employeeId}', [LeaveStatisticsController::class, 'getAprobacionesPorTipo']);
+Route::get('/dashboard-statistics', [DashboardStatisticsController::class, 'getStatistics']);
+
+// Ruta para obtener las estadísticas de permisos por estado para un empleado solicitante
+Route::get('/dashboard-statistics/solicitudes/{employeeId}', [DashboardStatisticsController::class, 'getSolicitudesPermisosPorEmpleado']);
+
 Route::middleware('auth:sanctum')->group(function () {
 
     Broadcast::routes();
@@ -48,6 +58,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read', [NotificationController::class, 'markAsRead']);
 
 
+    // Configuración 
+    Route::apiResource('configurations', ConfigurationController::class);
+
+    
     Route::post('logout', [AuthController::class, 'logout']);
 
     Route::apiResources([
@@ -91,6 +105,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //User
     Route::get('/user-auth', [UserController::class, 'userAuth']);
+    // Cambiar contraseña
+    Route::post('/change-password', [UserController::class, 'changePassword']);
 
     //Roles
     Route::get('roles', [RoleController::class, 'index']);

@@ -12,16 +12,22 @@ use App\Events\EmployeeCreated;
 use App\Models\Role;
 use Exception;
 use Illuminate\Support\Str;
-
 use Illuminate\Support\Facades\DB;
-
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 
 class EmployeeService
 {
     public function getAllEmployees()
     {
-        $employees = Employee::with('contact', 'address', 'position')
+            $employees = Employee::with([
+                'contact',
+                'address',
+                'position' => function ($query) {
+                    $query->withTrashed();
+                }
+            ])
             ->get()
             ->map(function ($employee) {
                 $employee->full_name = $employee->getFullNameAttribute();
@@ -37,7 +43,23 @@ class EmployeeService
 
     public function getEmployeeById($id)
     {
-        $employee = Employee::with(['contact', 'address', 'position.unit.direction', 'position.direction'])->findOrFail($id);
+        $employee = Employee::with([
+            'contact',
+            'address.parish.canton.province',
+            'position' => function ($query) {
+                $query->withTrashed(); // Incluir posiciones eliminadas
+            },
+            'position.unit' => function ($query) {
+                $query->withTrashed(); // Incluir unidades eliminadas
+            },
+            'position.unit.direction' => function ($query) {
+                $query->withTrashed(); // Incluir direcciones eliminadas
+            },
+            'position.direction' => function ($query) {
+                $query->withTrashed(); // Incluir direcciones eliminadas
+            },
+            'user.role'
+        ])->findOrFail($id);
 
         $employeeArray = $employee->toArray();
         $employeeArray['full_name'] = $employee->getFullNameAttribute();
@@ -55,13 +77,26 @@ class EmployeeService
         $employeeArray['direction'] = optional($employee->position->unit ? $employee->position->unit->direction : $employee->position->direction)->toArray();
 
 
+        // Obtener provincia y cantón si existen
+        if ($employee->address && $employee->address->parish) {
+            $employeeArray['address']['parish'] = $employee->address->parish->toArray();
+            $canton = $employee->address->parish->canton;
+            $employeeArray['address']['parish']['canton'] = optional($canton)->toArray();
+            if ($canton) {
+                $employeeArray['address']['parish']['canton']['province'] = optional($canton->province)->toArray();
+            }
+        }
+
+        // Agregar información del rol
+        if ($employee->user && $employee->user->role) {
+            $employeeArray['role'] = $employee->user->role->toArray();
+        }
+
         // Eliminar claves innecesarias
         unset($employeeArray['contact_id'], $employeeArray['address_id'], $employeeArray['position_id']);
 
         return $employeeArray;
     }
-
-
 
     public function createEmployee(Request $request)
     {
@@ -108,11 +143,21 @@ class EmployeeService
                 // Obtener el correo electrónico personal del empleado
                 $employeeEmail = $request->input('employee.contact.personal_email');
 
-                // Obtener el rol 'Empleado'
-                $employeeRole = Role::where('name', 'Empleado')->first();
+                // Obtener el rol seleccionado
+                $roleId = $request->input('user.role_id');
+                $employeeRole = Role::find($roleId);
 
-                // Generar contras 
+                // Generar contrasena
                 $generatedPassword = Str::random(10);
+
+                // Descargar la imagen por defecto desde la URL
+                $defaultPhotoUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQNL_ZnOTpXSvhf1UaK7beHey2BX42U6solRA&s';
+                $photoName = $userName . '_default_user_photo.png';
+                $photoPath = 'users_photo/' . $photoName;
+
+                // Guardar la imagen en el sistema de archivos
+                $imageContents = file_get_contents($defaultPhotoUrl);
+                Storage::disk('public')->put($photoPath, $imageContents);
 
                 // Crear el usuario asociado al empleado
                 $user = new User([
@@ -122,12 +167,13 @@ class EmployeeService
                     'employee_id' => $employee->id,
                     'role_id' => $employeeRole ? $employeeRole->id : null,
                     'user_state_id' => $activeState ? $activeState->id : null,
+                    'photo' => $photoPath
                 ]);
                 $user->save();
 
 
                 // Disparar el evento EmployeeCreated
-                 event(new EmployeeCreated($employee, $generatedPassword));
+                event(new EmployeeCreated($employee, $generatedPassword));
 
                 return $employee;
             } catch (Exception $e) {
@@ -135,7 +181,6 @@ class EmployeeService
             }
         });
     }
-
 
     public function updateEmployee($employeeId, $requestData)
     {
@@ -165,6 +210,16 @@ class EmployeeService
                     $address->save();
                     $employee->address()->associate($address);
                 }
+
+                // Actualizar el rol del usuario si se proporciona
+                if (isset($requestData['user']['role_id'])) {
+                    $user = $employee->user;
+                    if ($user) {
+                        $user->role_id = $requestData['user']['role_id'];
+                        $user->save();
+                    }
+                }
+
             } catch (Exception $e) {
                 throw new Exception($e->getMessage());
             }
@@ -175,12 +230,22 @@ class EmployeeService
 
     public function deleteEmployee($id)
     {
-        // Iniciar una transacción de base de datos
-        return DB::transaction(function () use ($id) {
-            try {
-                // Buscar al empleado por su ID
-                $employee = Employee::findOrFail($id);
+        $currentUserId = auth()->id(); // Obtener el ID del usuario actual
 
+        // Buscar al usuario actual
+        $currentUser = User::findOrFail($currentUserId);
+
+        // Verificar si el empleado a eliminar es el mismo que el empleado asociado al usuario actual
+        if ($currentUser->employee_id == $id) {
+            throw new Exception('No se puede eliminar a sí mismo');
+        }
+
+        // Buscar al empleado por su ID
+        $employee = Employee::findOrFail($id);
+
+        // Iniciar una transacción de base de datos
+        return DB::transaction(function () use ($employee) {
+            try {
                 // Eliminar los registros relacionados en la tabla employees
                 $employee->formalEducations()->delete();
                 $employee->trainings()->delete();
@@ -211,5 +276,7 @@ class EmployeeService
             }
         });
     }
+
+
 
 }

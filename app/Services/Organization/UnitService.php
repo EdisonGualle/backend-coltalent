@@ -28,10 +28,16 @@ class UnitService extends ResponseService
     public function getAllUnits(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $query = Unit::with('direction', 'manager.employee');
+            $query = Unit::with(['direction' => function ($query) use ($includeDeleted) {
+                if ($includeDeleted) {
+                    $query->withTrashed();
+                }
+            }, 'manager.employee']);
+    
             if ($includeDeleted) {
                 $query->withTrashed();
             }
+    
             $units = $query->get()->map(function ($unit) {
                 return $this->formatUnitData($unit);
             });
@@ -52,11 +58,21 @@ class UnitService extends ResponseService
         }
     }
 
-    public function getUnitById(string $id): JsonResponse
+    public function getUnitById(string $id, bool $includeDeleted = false): JsonResponse
     {
         try {
-            $unit = Unit::with('direction', 'manager.employee')->findOrFail($id);
-
+            $query = Unit::with(['direction' => function ($query) use ($includeDeleted) {
+                if ($includeDeleted) {
+                    $query->withTrashed();
+                }
+            }, 'manager.employee']);
+    
+            if ($includeDeleted) {
+                $query->withTrashed();
+            }
+    
+            $unit = $query->findOrFail($id);
+    
             return $this->successResponse('Detalles de la unidad obtenidos con éxito', $this->formatUnitData($unit));
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Unidad no encontrada', 404);

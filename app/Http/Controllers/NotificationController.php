@@ -14,8 +14,8 @@ class NotificationController extends Controller
 
         // Obtener notificaciones no leídas
         $notifications = Notification::where('user_id', $user->id)
-                                     ->whereNull('read_at')
-                                     ->get();
+            ->whereNull('read_at')
+            ->get();
 
         return response()->json($notifications);
     }
@@ -26,8 +26,8 @@ class NotificationController extends Controller
         $notificationIds = $request->input('notification_ids', []);
 
         Notification::whereIn('id', $notificationIds)
-                    ->where('type', '!=', 'Solicitud pendiente')
-                    ->update(['read_at' => now()]);
+            ->where('type', '!=', 'Solicitud pendiente')
+            ->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Notificaciones marcadas como leídas']);
     }

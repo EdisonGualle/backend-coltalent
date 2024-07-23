@@ -124,6 +124,7 @@ class LeaveService extends ResponseService
         $approver = Employee::find($approver_id);
         $approverName = $approver ? $approver->full_name : 'Aprobador';
         $approverPhoto = $approver ? $approver->user->photo : null;
+        $applicantPhoto = $leave->employee && $leave->employee->user && $leave->employee->user->photo ? $leave->employee->user->photo : null;
         $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
         $applicantName = $leave->employee->full_name; // Asegúrate de tener la relación employee definida en el modelo Leave
 
@@ -143,7 +144,7 @@ class LeaveService extends ResponseService
                 'leave_id' => $leave->id,
                 'message' => $message,
                 'approver_id' => $approver_id,
-                'approver_photo' => $approverPhoto,
+                'applicant_photo' => $applicantPhoto,
             ],
         ]);
 

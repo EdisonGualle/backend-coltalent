@@ -51,6 +51,11 @@ class UpdateEmployeeRequest extends FormRequest
             'employee.address.number' => 'nullable|numeric|max:5',
             'employee.address.reference' => 'nullable|string|max:255',
             'employee.address.parish_id' => 'nullable|exists:parishes,id',
+
+
+            // Role - tabla
+            'user.role_id' => 'nullable|exists:user_roles,id',
+
         ];
     }
 
@@ -118,6 +123,11 @@ class UpdateEmployeeRequest extends FormRequest
             'employee.position_id.numeric' => 'El cargo debe ser un valor numérico.',
             'employee.position_id.exists' => 'El cargo seleccionado no existe en el sistema. Por favor, seleccione un cargo válido.',
             'employee.position_id.unique' => 'Este cargo ya está asignado a un empleado activo.',
+
+
+            // Role - tabla
+            'user.role_id.required' => 'El rol es obligatorio. Por favor, seleccione un rol válido para el usuario.',
+            'user.role_id.exists' => 'El rol seleccionado no existe en el sistema. Por favor, seleccione un rol válido.',
         ];
     }
 }
