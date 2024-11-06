@@ -9,7 +9,7 @@ class UpdateUnitRequest extends FormRequest
     public function rules()
     {
         return [
-            'name' => 'string|max:255|unique:units,name,' . $this->route('unit'),
+            'name' => 'string|max:150|unique:units,name,' . $this->route('unit'),
             'function' => 'string|max:255',
             'phone' => 'nullable|digits:9',
             'direction_id' => 'exists:directions,id',
@@ -20,7 +20,7 @@ class UpdateUnitRequest extends FormRequest
     {
         return [
             'name.string' => 'El nombre de la unidad debe ser una cadena de texto.',
-            'name.max' => 'El nombre de la unidad no puede tener más de 255 caracteres.',
+            'name.max' => 'El nombre de la unidad no puede tener más de 150 caracteres.',
             'name.unique' => 'Ya existe una unidad con ese nombre.',
             'function.string' => 'La función de la unidad debe ser una cadena de texto.',
             'function.max' => 'La función de la unidad no puede tener más de 255 caracteres.',

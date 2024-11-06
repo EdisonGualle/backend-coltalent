@@ -17,7 +17,8 @@ class LeaveType extends Model
         'requires_document', 
         'advance_notice_days', 
         'time_unit',
-        'icon'
+        'icon',
+        'color'
     ];
 
     protected $hidden = [

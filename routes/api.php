@@ -16,6 +16,7 @@ use App\Http\Controllers\Employee\Education\FormalEducationController;
 use App\Http\Controllers\Employee\Education\TrainingController;
 use App\Http\Controllers\Employee\Education\TrainingTypeController;
 use App\Http\Controllers\Employee\EmployeeController;
+use App\Http\Controllers\Employee\Schedules\WorkScheduleController;
 use App\Http\Controllers\Leave\LeaveCommentController;
 use App\Http\Controllers\Leave\LeaveController;
 use App\Http\Controllers\Leave\LeaveStateController;
@@ -28,6 +29,8 @@ use App\Http\Controllers\Organization\OrganizationController;
 use App\Http\Controllers\Organization\PositionController;
 use App\Http\Controllers\Organization\UnitController;
 use App\Http\Controllers\ReportExcel\LeaveExportController;
+use App\Http\Controllers\Reports\LeaveReportController;
+use App\Http\Controllers\Reports\ReportController;
 use App\Http\Controllers\Role\RoleController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Controllers\User\UserStateController;
@@ -46,6 +49,12 @@ Route::get('/dashboard-statistics', [DashboardStatisticsController::class, 'getS
 
 // Ruta para obtener las estadísticas de permisos por estado para un empleado solicitante
 Route::get('/dashboard-statistics/solicitudes/{employeeId}', [DashboardStatisticsController::class, 'getSolicitudesPermisosPorEmpleado']);
+
+// Ruta para probar que funcione correctamente las exportaciones 
+Route::get('/export-approved-leaves', [ReportController::class, 'approvedLeavesReport']);
+
+Route::get('/leave-report', [LeaveReportController::class, 'generateReport']);
+
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -155,6 +164,7 @@ Route::middleware('auth:sanctum')->group(function () {
             'publications' => PublicationController::class,
             'work-experiences' => WorkExperienceController::class,
             'work-references' => WorkReferenceController::class,
+            'work-schedules' => WorkScheduleController::class,
         ]);
         Route::post('leaves', [LeaveController::class, 'store']);
         Route::get('leaves/assigned', [LeaveController::class, 'getFilteredLeaves']);
@@ -162,6 +172,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('leave-statistics', [LeaveController::class, 'getLeaveStatistics']);
         Route::patch('comments/{comment}', [LeaveCommentController::class, 'update']);
         Route::patch('leaves/{leave}', [LeaveController::class, 'update']);
+
+         Route::put('work-schedules', [WorkScheduleController::class, 'updateMultiple']);
     });
 
 
@@ -174,4 +186,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('directions', [OrganizationController::class, 'getDirections']);
     Route::get('directions/{directionId}/units-positions', [OrganizationController::class, 'getUnitsAndPositions']);
     Route::get('units/{unitId}/positions', [OrganizationController::class, 'getPositions']);
+
+
+
 });

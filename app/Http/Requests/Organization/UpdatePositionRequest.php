@@ -11,7 +11,7 @@ class UpdatePositionRequest extends FormRequest
     public function rules()
     {
         return [
-            'name' => 'string|max:255|unique:positions,name,' . $this->route('position'),
+            'name' => 'string|max:150|unique:positions,name,' . $this->route('position'),
             'function' => 'string|max:255',
             'direction_id' => 'nullable|exists:directions,id',
             'unit_id' => 'nullable|exists:units,id',
@@ -49,7 +49,7 @@ class UpdatePositionRequest extends FormRequest
     {
         return [
             'name.string' => 'El nombre del cargo debe ser una cadena de texto.',
-            'name.max' => 'El nombre del cargo no puede tener más de 255 caracteres.',
+            'name.max' => 'El nombre del cargo no puede tener más de 150 caracteres.',
             'name.unique' => 'Ya existe un cargo con ese nombre.',
             'function.string' => 'La función del cargo debe ser una cadena de texto.',
             'function.max' => 'La función del cargo no puede tener más de 255 caracteres.',

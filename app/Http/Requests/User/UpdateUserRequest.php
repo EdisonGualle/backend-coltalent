@@ -20,7 +20,7 @@ class UpdateUserRequest extends FormRequest
             'name' => [
                 'nullable',
                 'string',
-                'max:50',
+                'max:30',
                 Rule::unique('users')->ignore($userId),
             ],
             'email' => [
@@ -53,7 +53,7 @@ class UpdateUserRequest extends FormRequest
     {
         return [
             'name.string' => 'El nombre debe ser una cadena de texto.',
-            'name.max' => 'El nombre no puede tener más de 50 caracteres.',
+            'name.max' => 'El nombre no puede tener más de 30 caracteres.',
             'email.email' => 'El correo electrónico debe ser una dirección de correo electrónico válida.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.confirmed' => 'La confirmación de la contraseña no coincide.',

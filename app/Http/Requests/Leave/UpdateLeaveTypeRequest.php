@@ -18,7 +18,7 @@ class UpdateLeaveTypeRequest extends FormRequest
             'name' => [
                 'nullable',
                 'string',
-                'max:100',
+                'max:50',
                 Rule::unique('leave_types', 'name')->ignore($this->route('type')),
             ],
             'description' => 'nullable|string|max:500',
@@ -42,7 +42,8 @@ class UpdateLeaveTypeRequest extends FormRequest
             'requires_document' => 'nullable|in:Si,No',
             'advance_notice_days' => 'nullable|integer|min:1|max:10',
             'time_unit' => 'nullable|in:Días,Horas',
-            'icon' => 'string|max:30'
+            'icon' => 'nullable|string|max:30',
+            'color' => 'nullable|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/',
         ];
     }
 
@@ -61,7 +62,7 @@ class UpdateLeaveTypeRequest extends FormRequest
     {
         return [
             'name.string' => 'El nombre debe ser una cadena de texto.',
-            'name.max' => 'El nombre no puede exceder los 100 caracteres.',
+            'name.max' => 'El nombre no puede exceder los 50 caracteres.',
             'name.unique' => 'Ya existe un tipo de permiso con ese nombre.',
             'description.string' => 'La descripción debe ser una cadena de texto.',
             'description.max' => 'La descripción no puede exceder los 500 caracteres.',
@@ -74,6 +75,9 @@ class UpdateLeaveTypeRequest extends FormRequest
             'advance_notice_days.max' => 'El aviso previo no puede exceder los 10 días.',
             'time_unit.required' => 'La unidad de tiempo es obligatoria cuando la duración máxima está presente.',
             'time_unit.in' => 'La unidad de tiempo debe ser "Días" o "Horas".',
+            'color.string' => 'El color debe ser una cadena de texto.',
+            'color.max' => 'El color no puede exceder los 7 caracteres.',
+            'color.regex' => 'El color debe ser un valor hexadecimal válido (ej. #FFFFFF).'
         ];
     }
 }

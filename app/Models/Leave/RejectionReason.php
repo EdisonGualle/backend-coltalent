@@ -19,6 +19,7 @@ class RejectionReason extends Model
         'updated_at'
     ];
 
+    public $timestamps = false;
 
     public function comments()
     {

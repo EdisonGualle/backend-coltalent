@@ -78,11 +78,12 @@ class AuthenticationService
 
 
     protected function isUserBlocked($user, $lockoutTime)
-    {$blockedUntil = $user->blocked_until;
+    {
+        $blockedUntil = $user->blocked_until;
 
         // Asegurarse de que $blockedUntil sea un objeto Carbon
         $blockedUntil = Carbon::parse($blockedUntil);
-    
+
         return $blockedUntil && now()->lt($blockedUntil->addMinutes($lockoutTime));
     }
 
@@ -99,9 +100,7 @@ class AuthenticationService
 
     protected function handleUserNotFound($username, $email)
     {
-        $message = $username
-            ? 'El usuario no existe.'
-            : 'El correo electrónico no existe.';
+      $message = 'Credenciales incorrectas.';
 
         return ['successful' => false, 'message' => $message];
     }
@@ -112,7 +111,7 @@ class AuthenticationService
             ? 'Usuario inactivo.'
             : 'Correo inactivo.';
 
-        return ['successful' => false, 'message' =>$message];
+        return ['successful' => false, 'message' => $message];
     }
 
     protected function handleBlockedUser($remainingTime)
@@ -127,7 +126,7 @@ class AuthenticationService
     {
         $user->tokens()->delete();
         $token = $user->createToken('API_TOKEN')->plainTextToken;
-        
+
         return [
             'successful' => true,
             'message' => 'Inicio de sesión exitoso',

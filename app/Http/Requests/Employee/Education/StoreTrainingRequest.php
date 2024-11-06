@@ -9,7 +9,7 @@ class StoreTrainingRequest extends FormRequest
     public function rules()
     {
         return [
-            'institution' => 'required|string|max:255',
+            'institution' => 'required|string|max:150',
             'topic' => 'required|string|max:255',
             'year' => 'required|integer|min:1990|lte:' . date('Y'),
             'num_hours' => 'required|integer|min:1|max:1000',
@@ -22,7 +22,7 @@ class StoreTrainingRequest extends FormRequest
         return [
             'institution.required' => 'La institución es obligatoria.',
             'institution.string' => 'La institución debe ser una cadena de texto.',
-            'institution.max' => 'La institución no debe exceder los 255 caracteres.',
+            'institution.max' => 'La institución no debe exceder los 150 caracteres.',
             'topic.required' => 'El tema es obligatorio.',
             'topic.string' => 'El tema debe ser una cadena de texto.',
             'topic.max' => 'El tema no debe exceder los 255 caracteres.',

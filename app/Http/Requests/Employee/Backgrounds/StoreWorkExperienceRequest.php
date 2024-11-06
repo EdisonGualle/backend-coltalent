@@ -28,13 +28,13 @@ class StoreWorkExperienceRequest extends FormRequest
         return [
             'from' => 'required|date|after_or_equal:1990-01-01',
             'to' => 'required|date|after:from|before_or_equal:today|min_month_difference',
-            'position' => 'required|string|max:255',
-            'institution' => 'required|string|max:255',
+            'position' => 'required|string|max:150',
+            'institution' => 'required|string|max:150',
             'responsibilities' => 'required|string',
             'activities' => 'nullable|string',
             'functions' => 'nullable|string',
             'departure_reason' => 'nullable|string',
-            'note' => 'nullable|string',
+            'note' => 'nullable|string|max:255',
         ];
     }
 
@@ -51,10 +51,10 @@ class StoreWorkExperienceRequest extends FormRequest
             'to.min_month_difference' => 'Debe tener minimo un mes de experiencia.',
             'position.required' => 'El cargo es obligatorio.',
             'position.string' => 'El cargo debe ser una cadena de texto.',
-            'position.max' => 'El cargo no debe exceder los 255 caracteres.',
+            'position.max' => 'El cargo no debe exceder los 150 caracteres.',
             'institution.required' => 'La institución es obligatoria.',
             'institution.string' => 'La institución debe ser una cadena de texto.',
-            'institution.max' => 'La institución no debe exceder los 255 caracteres.',
+            'institution.max' => 'La institución no debe exceder los 150 caracteres.',
             'responsibilities.required' => 'Las responsabilidades son obligatorias.',
             'responsibilities.string' => 'Las responsabilidades deben ser una cadena de texto.',
             'activities.string' => 'Las actividades deben ser una cadena de texto.',

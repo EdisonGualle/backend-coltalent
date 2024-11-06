@@ -9,7 +9,7 @@ class UpdateTrainingRequest extends FormRequest
     public function rules()
     {
         return [
-            'institution' => 'string|max:255',
+            'institution' => 'string|max:150',
             'topic' => 'string|max:255',
             'year' => 'integer|min:1990|lte:' . date('Y'),
             'num_hours' => 'integer|min:1|max:1000',

@@ -14,7 +14,7 @@ class StoreLeaveTypeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:100|unique:leave_types,name',
+            'name' => 'required|string|max:50|unique:leave_types,name',
             'description' => 'required|string|max:500',
             'max_duration' => [
                 'nullable',
@@ -22,7 +22,7 @@ class StoreLeaveTypeRequest extends FormRequest
                     if ($this->input('time_unit') === 'Días') {
                         if (!preg_match('/^\d+$/', $value)) {
                             $fail('El formato de la duración máxima en días es incorrecto.');
-                        } elseif ((int)$value < 1 || (int)$value > 30) {
+                        } elseif ((int) $value < 1 || (int) $value > 30) {
                             $fail('La duración máxima en días debe estar entre 1 y 30 días.');
                         }
                     } elseif ($this->input('time_unit') === 'Horas') {
@@ -41,10 +41,11 @@ class StoreLeaveTypeRequest extends FormRequest
                     }
                 },
             ],
-            'requires_document' => 'required|in:Si,No',
+            'requires_document' => 'nullable|in:Si,No',
             'advance_notice_days' => 'required|integer|min:1|max:10',
             'time_unit' => 'nullable|in:Días,Horas',
-            'icon' => 'required|string|max:30'
+            'icon' => 'required|string|max:30',
+            'color' => 'required|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/'
         ];
     }
 
@@ -64,7 +65,7 @@ class StoreLeaveTypeRequest extends FormRequest
         return [
             'name.required' => 'El nombre es obligatorio.',
             'name.string' => 'El nombre debe ser una cadena de texto.',
-            'name.max' => 'El nombre no puede exceder los 100 caracteres.',
+            'name.max' => 'El nombre no puede exceder los 50 caracteres.',
             'name.unique' => 'Ya existe un tipo de permiso con ese nombre.',
             'description.required' => 'La descripción es obligatoria.',
             'description.string' => 'La descripción debe ser una cadena de texto.',
@@ -80,7 +81,11 @@ class StoreLeaveTypeRequest extends FormRequest
             'time_unit.in' => 'La unidad de tiempo debe ser "Días" o "Horas".',
             'icon.required' => 'El icono es obligatorio.',
             'icon.string' => 'El icono debe ser una cadena de texto.',
-            'icon.max' => 'El icono no puede exceder los 30 caracteres.'
+            'icon.max' => 'El icono no puede exceder los 30 caracteres.',
+            'color.required' => 'El color es obligatorio.',
+            'color.string' => 'El color debe ser una cadena de texto.',
+            'color.max' => 'El color no puede exceder los 7 caracteres.',
+            'color.regex' => 'El color debe ser un valor hexadecimal válido (ej. #FFFFFF).'
         ];
     }
 }

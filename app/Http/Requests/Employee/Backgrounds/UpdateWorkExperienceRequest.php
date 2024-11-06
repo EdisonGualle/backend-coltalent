@@ -28,13 +28,13 @@ class UpdateWorkExperienceRequest extends FormRequest
         return [
             'from' => 'date|after_or_equal:1990-01-01',
             'to' => 'date|after:from|before_or_equal:today|min_month_difference',
-            'position' => 'string|max:255',
-            'institution' => 'string|max:255',
+            'position' => 'string|max:150',
+            'institution' => 'string|max:150',
             'responsibilities' => 'string',
             'activities' => 'string',
             'functions' => 'string',
             'departure_reason' => 'string',
-            'note' => 'string',
+            'note' => 'string|max:255',
         ];
     }
 
@@ -48,9 +48,9 @@ class UpdateWorkExperienceRequest extends FormRequest
             'to.before_or_equal' => 'La fecha de finalización debe ser igual o anterior a hoy.',
             'to.min_month_difference' => 'Debe tener minimo un mes de experiencia.',
             'position.string' => 'El cargo debe ser una cadena de texto.',
-            'position.max' => 'El cargo no debe exceder los 255 caracteres.',
+            'position.max' => 'El cargo no debe exceder los 150 caracteres.',
             'institution.string' => 'La institución debe ser una cadena de texto.',
-            'institution.max' => 'La institución no debe exceder los 255 caracteres.',
+            'institution.max' => 'La institución no debe exceder los 150 caracteres.',
             'responsibilities.string' => 'Las responsabilidades deben ser una cadena de texto.',
             'activities.string' => 'Las actividades deben ser una cadena de texto.',
             'functions.string' => 'Las funciones deben ser una cadena de texto.',
