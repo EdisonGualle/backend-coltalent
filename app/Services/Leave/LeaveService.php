@@ -22,103 +22,110 @@ use App\Mail\ApprovalNotificationMail;
 
 class LeaveService extends ResponseService
 {
-    // Crear una solicitud de permiso para un empleado
     public function createLeave(int $employee_id, array $data): JsonResponse
     {
         DB::beginTransaction();
-
+    
         try {
             // Establecer el estado inicial de la solicitud de permiso
             $data['employee_id'] = $employee_id;
             $data['state_id'] = LeaveState::where('name', 'Pendiente')->first()->id;
-
+    
             // Crear la solicitud de permiso
             $leave = Leave::create($data);
-
+    
             // Obtener el empleado que solicita el permiso
             $employee = Employee::findOrFail($employee_id);
-
-            // Variable para almacenar el ID del aprobador
-            $approverId = null;
-
-            // Verificar si el empleado es un jefe general
-            if ($employee->position->is_general_manager) {
-                // Obtener el administrador (jefe de talento humano)
-                $admin = Employee::whereHas('user', function ($query) {
-                    $query->whereHas('role', function ($q) {
-                        $q->where('name', 'Administrador');
-                    });
-                })->first();
-
-                if (!$admin) {
-                    throw new \Exception("No se encontró el jefe de talento humano");
-                }
-                $approverId = $admin->id;
-                // Crear el comentario inicial asignado al administrador
-                LeaveComment::create([
-                    'leave_id' => $leave->id,
-                    'commented_by' => $admin->id,
-                    'action' => 'Pendiente'
-                ]);
-            }
-            // Verificar si el empleado es un jefe de dirección
-            elseif ($employee->position->is_manager && $employee->position->direction_id) {
-                // Si es jefe de dirección, enrutar al jefe general
-                $generalManager = Position::where('is_general_manager', true)->first();
-
-                if (!$generalManager || !$generalManager->employee) {
-                    throw new \Exception("No se encontró el jefe general");
-                }
-
-                $approverId = $generalManager->employee->id;
-                // Crear el comentario inicial asignado al jefe general
-                LeaveComment::create([
-                    'leave_id' => $leave->id,
-                    'commented_by' => $generalManager->employee->id,
-                    'action' => 'Pendiente'
-                ]);
-            } else {
-                // Para otros empleados, determinar la dirección
-                $directionId = $employee->position->unit_id ?
-                    Unit::findOrFail($employee->position->unit_id)->direction_id :
-                    $employee->position->direction_id;
-
-                // Obtener el jefe de dirección
-                $manager = Position::where('direction_id', $directionId)
-                    ->where('is_manager', true)
-                    ->first();
-
-                if (!$manager || !$manager->employee) {
-                    throw new \Exception("No se encontró el jefe de dirección");
-                }
-
-                $approverId = $manager->employee->id;
-                // Crear el comentario inicial asignado al jefe de dirección
-                LeaveComment::create([
-                    'leave_id' => $leave->id,
-                    'commented_by' => $manager->employee->id,
-                    'action' => 'Pendiente'
-                ]);
-            }
-
+    
+            // Determinar el aprobador
+            $approverId = $this->determineApprover($employee);
+    
+            // Crear el comentario inicial asignado al aprobador
+            LeaveComment::create([
+                'leave_id' => $leave->id,
+                'commented_by' => $approverId,
+                'action' => 'Pendiente'
+            ]);
+    
             // Crear la notificación para el primer aprobador
             $this->createPendingNotification($leave, $approverId);
-
-            // Enviar correo al empleado solicitante
-            $approver = Employee::findOrFail($approverId);
-            Mail::to($employee->user->email)->send(new LeaveRequestedMail($employee, $leave, $approver));
-
-
+    
             DB::commit();
-
+    
             return $this->successResponse('Solicitud de permiso creada con éxito', $leave, 201);
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->errorResponse('No se pudo crear la solicitud de permiso: ' . $e->getMessage(), 500);
         }
     }
-
-    // Crear una notificación para el próximo aprobador
+    
+    private function determineApprover(Employee $employee): int
+    {
+        if ($employee->position->is_general_manager) {
+            // Caso 1: Jefe General
+            $admin = Employee::whereHas('user', function ($query) {
+                $query->whereHas('role', function ($q) {
+                    $q->where('name', 'Administrador');
+                });
+            })->first();
+    
+            if (!$admin) {
+                throw new \Exception("No se encontró el jefe de talento humano");
+            }
+    
+            return $admin->id;
+        } elseif ($employee->position->is_manager && $employee->position->direction_id) {
+            // Caso 2: Jefe de Dirección
+            $generalManager = Position::where('is_general_manager', true)->first();
+    
+            if (!$generalManager || !$generalManager->employee) {
+                throw new \Exception("No se encontró el jefe general");
+            }
+    
+            return $generalManager->employee->id;
+        } elseif ($employee->position->is_manager && $employee->position->unit_id) {
+            // Caso 3: Jefe de Unidad
+            // Buscar el jefe de la dirección correspondiente a la unidad
+            $unit = Unit::findOrFail($employee->position->unit_id);
+            $directionManager = Position::where('direction_id', $unit->direction_id)
+                ->where('is_manager', true)
+                ->first();
+    
+            if (!$directionManager || !$directionManager->employee) {
+                throw new \Exception("No se encontró el jefe de la dirección correspondiente a la unidad");
+            }
+    
+            return $directionManager->employee->id;
+        } elseif ($employee->position->unit_id) {
+            // Caso 4: Empleado de una Unidad
+            // Buscar el jefe de la unidad
+            $unitManager = Position::where('unit_id', $employee->position->unit_id)
+                ->where('is_manager', true)
+                ->first();
+    
+            if (!$unitManager || !$unitManager->employee) {
+                throw new \Exception("No se encontró el jefe de la unidad");
+            }
+    
+            return $unitManager->employee->id;
+        } elseif ($employee->position->direction_id) {
+            // Caso 5: Empleado de una Dirección
+            // Buscar el jefe de la dirección
+            $directionManager = Position::where('direction_id', $employee->position->direction_id)
+                ->where('is_manager', true)
+                ->first();
+    
+            if (!$directionManager || !$directionManager->employee) {
+                throw new \Exception("No se encontró el jefe de la dirección");
+            }
+    
+            return $directionManager->employee->id;
+        } else {
+            // Caso 6: Sin Asignación de Aprobador
+            throw new \Exception("No se pudo determinar el aprobador para el empleado");
+        }
+    }
+    
     private function createPendingNotification(Leave $leave, int $approver_id)
     {
         $approver = Employee::find($approver_id);
@@ -127,16 +134,16 @@ class LeaveService extends ResponseService
         $applicantPhoto = $leave->employee && $leave->employee->user && $leave->employee->user->photo ? $leave->employee->user->photo : null;
         $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
         $applicantName = $leave->employee->full_name; // Asegúrate de tener la relación employee definida en el modelo Leave
-
+    
         $message = "Tienes una nueva solicitud de permiso de {$applicantName} para el día {$startDate}, pendiente de aprobación.";
-
+    
         // Obtener el usuario asociado al empleado que es el próximo aprobador
         $user = User::where('employee_id', $approver_id)->first();
-
+    
         if (!$user) {
             throw new \Exception("No se encontró el usuario asociado al empleado con ID: {$approver_id}");
         }
-
+    
         $notification = Notification::create([
             'user_id' => $user->id,  // Usuario que recibe la notificación
             'type' => 'Solicitud pendiente',
@@ -147,11 +154,11 @@ class LeaveService extends ResponseService
                 'applicant_photo' => $applicantPhoto,
             ],
         ]);
-
+    
         event(new NotificationEvent($notification));
-
+    
         // Enviar el correo electrónico al aprobador
-    Mail::to($user->email)->send(new ApprovalNotificationMail($approver, $leave, $leave->employee));
+        // Mail::to($user->email)->send(new ApprovalNotificationMail($approver, $leave, $leave->employee));
     }
 
     public function updateLeave(int $employee_id, int $leave_id, array $data): JsonResponse
@@ -501,7 +508,6 @@ class LeaveService extends ResponseService
     }
 
     // Obtener las estadísticas de permisos de un empleado
-// Obtener las estadísticas de permisos de un empleado
     public function getLeaveStatistics(int $employee_id): JsonResponse
     {
         try {
