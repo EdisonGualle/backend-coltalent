@@ -158,7 +158,7 @@ class LeaveService extends ResponseService
         event(new NotificationEvent($notification));
     
         // Enviar el correo electrónico al aprobador
-        // Mail::to($user->email)->send(new ApprovalNotificationMail($approver, $leave, $leave->employee));
+        Mail::to($user->email)->send(new ApprovalNotificationMail($approver, $leave, $leave->employee));
     }
 
     public function updateLeave(int $employee_id, int $leave_id, array $data): JsonResponse
@@ -207,169 +207,165 @@ class LeaveService extends ResponseService
         }
     }
 
-    // Obtener las solicitudes de permiso de un empleado asignado con filtros opcionales para el estado 
-    public function getLeavesByFilter(int $employee_id, string $filter): JsonResponse
-    {
-        try {
-            // Obtener el usuario actual y su rol
-            $currentEmployee = Employee::with('user.role')->find($employee_id);
-            if (!$currentEmployee) {
-                throw new \Exception("Empleado no encontrado");
-            }
-            $currentUserRole = $currentEmployee->user->role->name;
-            $currentEmployeeId = $currentEmployee->id;
-
-            $query = Leave::query();
-
-            switch ($filter) {
-                case 'pendientes':
-                    $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
-                        $q->where('commented_by', $currentEmployeeId)
-                            ->where('action', 'Pendiente');
-                    });
-                    break;
-                case 'aprobados':
-                    $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
-                        $q->where('commented_by', $currentEmployeeId)
-                            ->where('action', 'Aprobado');
-                    });
-                    break;
-                case 'rechazados':
-                    $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
-                        $q->where('commented_by', $currentEmployeeId)
-                            ->where('action', 'Rechazado');
-                    });
-                    break;
-                case 'Corregir':
-                    $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
-                        $q->where('commented_by', $currentEmployeeId)
-                            ->where('action', 'Corregir');
-                    });
-                    break;
-                case 'historial':
-                    $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
-                        $q->where('commented_by', $currentEmployeeId);
-                    });
-                    break;
-                default:
-                    break;
-            }
-            // Ordenar los resultados por el id en orden descendente
-            $query->orderBy('id', 'desc');
-
-            $leaves = $query->with([
-                'employee:id,identification,position_id,first_name,second_name,last_name,second_last_name',
-                'employee.position:id,name,unit_id,direction_id',
-                'employee.position.unit:id,name,direction_id',
-                'employee.position.unit.direction:id,name',
-                'employee.position.direction:id,name',
-                'leaveType' => function ($query) {
-                    $query->withTrashed()->select('id', 'name');
-                },
-                'state:id,name',
-                'comments' => function ($query) {
-                    $query->with([
-                        'rejectionReason' => function ($query) {
-                            $query->withTrashed();
-                        }
-                    ]);
-                },
-                'comments.commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
-                'comments.commentedBy.position:id,name'
-            ])->get();
-
-            // Formatear y añadir los comentarios al permiso
-            $leaves->each(function ($leave) use ($currentUserRole) {
-                $comments = $leave->comments;
-
-                // Asignar comentarios
-                $leave->comentario_1 = $comments->first(function ($comment) {
-                    return $comment->commentedBy->user->role->name !== 'Administrador';
-                });
-
-                $leave->comentario_2 = $comments->first(function ($comment) {
-                    return $comment->commentedBy->user->role->name === 'Administrador';
-                });
-
-                // Formatear los comentarios
-                foreach (['comentario_1', 'comentario_2'] as $commentKey) {
-                    if ($leave->{$commentKey}) {
-                        $comment = $leave->{$commentKey};
-                        $interactionDate = $comment->created_at != $comment->updated_at ? $comment->updated_at : null;
-                        $leave->{$commentKey} = [
-                            'id' => $comment->id,
-                            'comment' => $comment->comment,
-                            'commented_by_full_name' => $comment->commentedBy ? $comment->commentedBy->getFullNameAttribute() : null,
-                            'commented_by_name' => $comment->commentedBy ? $comment->commentedBy->getNameAttribute() : null,
-                            'commented_by_position' => $comment->commentedBy && $comment->commentedBy->position ? $comment->commentedBy->position->name : null,
-                            'rejection_reason' => $comment->rejectionReason ? $comment->rejectionReason->reason : null,
-                            'action' => $comment->action ? $comment->action : null,
-                            'interaction_date' => $interactionDate,
-                        ];
-                    }
-                }
-
-                // Obtener la dirección de la unidad si existe, o directamente la dirección del puesto
-                $direction = $leave->employee->position->unit
-                    ? $leave->employee->position->unit->direction
-                    : $leave->employee->position->direction;
-
-                $unit = $leave->employee->position->unit;
-
-                $leave->employee->direction_name = $direction ? $direction->name : null;
-                $leave->employee->unit_name = $unit ? $unit->name : null;
-
-                // Añadir full_name, name y position_name del empleado
-                $leave->employee->full_name = $leave->employee->getFullNameAttribute();
-                $leave->employee->name = $leave->employee->getNameAttribute();
-                $leave->employee->position_name = $leave->employee->position ? $leave->employee->position->name : null;
-
-                // Calcular la duración del permiso
-                if ($leave->start_date && $leave->end_date) {
-                    $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
-                    $end_date = \DateTime::createFromFormat('Y-m-d', $leave->end_date);
-                    if ($start_date && $end_date) {
-                        $interval = $start_date->diff($end_date);
-                        $days = $interval->days + 1; // Incluye el último día
-                        $leave->duration = $days . ' ' . ($days > 1 ? 'Días' : 'Día');
-                        $leave->requested_period = $start_date->format('d/m/Y') . "\n" . $end_date->format('d/m/Y');
-                    }
-                } elseif ($leave->start_time && $leave->end_time) {
-                    $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
-                    $start_time = \DateTime::createFromFormat('H:i:s', $leave->start_time);
-                    $end_time = \DateTime::createFromFormat('H:i:s', $leave->end_time);
-                    if ($start_date && $start_time && $end_time) {
-                        $interval = $start_time->diff($end_time);
-                        $hours = $interval->h;
-                        $minutes = $interval->i;
-                        if ($hours > 0) {
-                            if ($minutes > 0) {
-                                $leave->duration = $hours . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT) . ' Horas';
-                            } else {
-                                $leave->duration = $hours . ' ' . ($hours > 1 ? 'Horas' : 'Hora');
-                            }
-                        } else {
-                            $leave->duration = $minutes . ' Minutos';
-                        }
-                        // Formatear requested_period para mostrar la fecha y horas en líneas separadas
-                        $leave->requested_period = $start_date->format('d/m/Y') . "\n" . $start_time->format('H:i') . ' - ' . $end_time->format('H:i');
-                    }
-                } else {
-                    $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
-                    $leave->duration = null;
-                    $leave->requested_period = $start_date ? $start_date->format('d/m/Y') : null;
-                }
-
-                // Ocultar los campos innecesarios
-                $leave->employee->makeHidden(['first_name', 'second_name', 'last_name', 'second_last_name', 'position']);
-                $leave->makeHidden(['employee_id', 'leave_type_id', 'state_id', 'comments']);
-            });
-
-            return $this->successResponse('Solicitudes de permisos obtenidas con éxito', $leaves);
-        } catch (\Exception $e) {
-            return $this->errorResponse('Error al obtener las solicitudes de permisos: ' . $e->getMessage(), 500);
+// Obtener las solicitudes de permiso de un empleado asignado con filtros opcionales para el estado 
+public function getLeavesByFilter(int $employee_id, string $filter): JsonResponse
+{
+    try {
+        // Obtener el usuario actual y su rol
+        $currentEmployee = Employee::with('user.role')->find($employee_id);
+        if (!$currentEmployee) {
+            throw new \Exception("Empleado no encontrado");
         }
+        $currentUserRole = $currentEmployee->user->role->name;
+        $currentEmployeeId = $currentEmployee->id;
+
+        $query = Leave::query();
+
+        switch ($filter) {
+            case 'pendientes':
+                $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
+                    $q->where('commented_by', $currentEmployeeId)
+                        ->where('action', 'Pendiente');
+                });
+                break;
+            case 'aprobados':
+                $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
+                    $q->where('commented_by', $currentEmployeeId)
+                        ->where('action', 'Aprobado');
+                });
+                break;
+            case 'rechazados':
+                $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
+                    $q->where('commented_by', $currentEmployeeId)
+                        ->where('action', 'Rechazado');
+                });
+                break;
+            case 'Corregir':
+                $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
+                    $q->where('commented_by', $currentEmployeeId)
+                        ->where('action', 'Corregir');
+                });
+                break;
+            case 'historial':
+                $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
+                    $q->where('commented_by', $currentEmployeeId);
+                });
+                break;
+            default:
+                break;
+        }
+        // Ordenar los resultados por el id en orden descendente
+        $query->orderBy('id', 'desc');
+
+        $leaves = $query->with([
+            'employee:id,identification,position_id,first_name,second_name,last_name,second_last_name',
+            'employee.position:id,name,unit_id,direction_id',
+            'employee.position.unit:id,name,direction_id',
+            'employee.position.unit.direction:id,name',
+            'employee.position.direction:id,name',
+            'leaveType' => function ($query) {
+                $query->withTrashed()->select('id', 'name');
+            },
+            'state:id,name',
+            'comments' => function ($query) {
+                $query->with([
+                    'rejectionReason' => function ($query) {
+                        $query->withTrashed();
+                    }
+                ]);
+            },
+            'comments.commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
+            'comments.commentedBy.position:id,name'
+        ])->get();
+
+        // Formatear y añadir los comentarios al permiso
+        $leaves->each(function ($leave) use ($currentUserRole) {
+            $comments = $leave->comments;
+
+            // Asignar comentarios
+            $leave->setAttribute('comentario_1', $comments->first(function ($comment) {
+                return $comment->commentedBy->user->role->name !== 'Administrador';
+            }));
+            
+            $leave->setAttribute('comentario_2', $comments->first(function ($comment) {
+                return $comment->commentedBy->user->role->name === 'Administrador';
+            }));
+
+            // Formatear los comentarios
+            foreach (['comentario_1', 'comentario_2'] as $commentKey) {
+                if ($leave->{$commentKey}) {
+                    $comment = $leave->{$commentKey};
+                    $interactionDate = $comment->created_at != $comment->updated_at ? $comment->updated_at : null;
+                    $leave->{$commentKey} = [
+                        'id' => $comment->id,
+                        'comment' => $comment->comment,
+                        'commented_by_full_name' => $comment->commentedBy ? $comment->commentedBy->getFullNameAttribute() : null,
+                        'commented_by_name' => $comment->commentedBy ? $comment->commentedBy->getNameAttribute() : null,
+                        'commented_by_position' => $comment->commentedBy && $comment->commentedBy->position ? $comment->commentedBy->position->name : null,
+                        'rejection_reason' => $comment->rejectionReason ? $comment->rejectionReason->reason : null,
+                        'action' => $comment->action ? $comment->action : null,
+                        'interaction_date' => $interactionDate,
+                    ];
+                }
+            }
+
+            // Obtener la dirección de la unidad si existe, o directamente la dirección del puesto
+            $direction = $leave->employee->position->unit
+                ? $leave->employee->position->unit->direction
+                : $leave->employee->position->direction;
+
+            $unit = $leave->employee->position->unit;
+
+            $leave->employee->direction_name = $direction ? $direction->name : null;
+            $leave->employee->unit_name = $unit ? $unit->name : null;
+
+            // Añadir full_name, name y position_name del empleado
+            $leave->employee->full_name = $leave->employee->getFullNameAttribute();
+            $leave->employee->name = $leave->employee->getNameAttribute();
+            $leave->employee->position_name = $leave->employee->position ? $leave->employee->position->name : null;
+
+            // Calcular la duración del permiso y requested_period usando setAttribute
+            if ($leave->start_date && $leave->end_date) {
+                $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
+                $end_date = \DateTime::createFromFormat('Y-m-d', $leave->end_date);
+                if ($start_date && $end_date) {
+                    $interval = $start_date->diff($end_date);
+                    $days = $interval->days + 1; // Incluye el último día
+                    $leave->setAttribute('duration', $days . ' ' . ($days > 1 ? 'Días' : 'Día'));
+                    $leave->setAttribute('requested_period', $start_date->format('d/m/Y') . "\n" . $end_date->format('d/m/Y'));
+                }
+            } elseif ($leave->start_time && $leave->end_time) {
+                $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
+                $start_time = \DateTime::createFromFormat('H:i:s', $leave->start_time);
+                $end_time = \DateTime::createFromFormat('H:i:s', $leave->end_time);
+                if ($start_date && $start_time && $end_time) {
+                    $interval = $start_time->diff($end_time);
+                    $hours = $interval->h;
+                    $minutes = $interval->i;
+                    $formattedDuration = $hours > 0 
+                        ? $hours . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT) . ' Horas' 
+                        : $minutes . ' Minutos';
+                    
+                    $leave->setAttribute('duration', $formattedDuration);
+                    $leave->setAttribute('requested_period', $start_date->format('d/m/Y') . "\n" . $start_time->format('H:i') . ' - ' . $end_time->format('H:i'));
+                }
+            } else {
+                $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
+                $leave->setAttribute('duration', null);
+                $leave->setAttribute('requested_period', $start_date ? $start_date->format('d/m/Y') : null);
+            }
+
+            // Ocultar los campos innecesarios
+            $leave->employee->makeHidden(['first_name', 'second_name', 'last_name', 'second_last_name', 'position']);
+            $leave->makeHidden(['employee_id', 'leave_type_id', 'state_id', 'comments']);
+        });
+
+        return $this->successResponse('Solicitudes de permisos obtenidas con éxito', $leaves);
+    } catch (\Exception $e) {
+        return $this->errorResponse('Error al obtener las solicitudes de permisos: ' . $e->getMessage(), 500);
     }
+}
+
 
 
 
