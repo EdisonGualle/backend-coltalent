@@ -358,12 +358,12 @@ class LeaveCommentService extends ResponseService
     
         // Generar mensaje dinámico basado en la acción
         $message = match ($action) {
-            'Primera aprobación' => "Tu solicitud de permiso para el {$startDate} ha sido aprobada por {$approverName}.",
-            'Segunda aprobación' => "Tu solicitud de permiso para el {$startDate} ha sido aprobada por {$approverName} en el segundo nivel.",
-            'Aprobación final' => "Tu solicitud de permiso para el {$startDate} ha sido aprobada definitivamente por {$approverName}.",
-            'Rechazado' => "Tu solicitud de permiso para el {$startDate} ha sido rechazada por {$approverName}.",
-            'Corregir' => "Tu solicitud de permiso para el {$startDate} ha sido marcada para corrección por {$approverName}.",
-            default => 'Acción realizada.',
+            'Primera aprobación' => "✅ Tu solicitud para el {$startDate} ha sido aprobada por {$approverName}. ¡Sigue pendiente de la próxima aprobación! 🎯",
+            'Segunda aprobación' => "👏 ¡Paso importante! La solicitud para el {$startDate} ha sido revisada por {$approverName}. Solo falta la aprobación final.",
+            'Aprobación final' => "🎉 ¡Felicidades! Tu permiso para el {$startDate} ha sido aprobado definitivamente por {$approverName}.",
+            'Rechazado' => "🚫 Tu solicitud para el {$startDate} fue rechazada por {$approverName}. Comunícate con ellos para más detalles.",
+            'Corregir' => "🔄 Necesitamos algunos ajustes en tu solicitud para el {$startDate}. Revisa los comentarios de {$approverName} y actualízala lo antes posible.",
+            default => "ℹ️ Se realizó una acción sobre tu solicitud. Verifica los detalles.",
         };
     
         // Obtener el usuario asociado al empleado que recibe la notificación
