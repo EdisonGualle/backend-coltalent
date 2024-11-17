@@ -168,6 +168,15 @@ class LeaveCommentService extends ResponseService
     {
         $nextApprover = $this->getNextApprover($leave, $approver_id);
     
+        // Determinar el nivel actual de aprobación basado en los comentarios existentes
+        $approvedComments = $leave->comments()->where('action', 'Aprobado')->count();
+        $approvalStage = match ($approvedComments) {
+            1 => 'Primera aprobación',
+            2 => 'Segunda aprobación',
+            3 => 'Aprobación final',
+            default => 'Acción realizada',
+        };
+    
         if ($nextApprover) {
             // Crear comentario para el siguiente aprobador
             LeaveComment::create([
@@ -179,14 +188,19 @@ class LeaveCommentService extends ResponseService
             // Actualizar el estado a Pendiente para el siguiente nivel de aprobación
             $leave->update(['state_id' => $this->getStateId('Pendiente')]);
     
-            // Crear notificaciones y enviar correo
-            $this->createNotification($leave, $approver_id, 'Primera aprobación');
-            $this->createPendingNotification($leave, $nextApprover->id);
-            $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
+            // Crear notificación para la acción actual
+            $this->createNotification($leave, $approver_id, $approvalStage);
     
+            // Crear notificación pendiente para el próximo aprobador
+            $this->createPendingNotification($leave, $nextApprover->id);
+    
+            // Enviar correo al próximo aprobador
+            $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
         } else {
             // Si no hay más aprobadores, aprobar definitivamente
             $leave->update(['state_id' => $this->getStateId('Aprobado')]);
+    
+            // Crear notificación final de aprobación
             $this->createNotification($leave, $approver_id, 'Aprobación final');
         }
     }
@@ -341,24 +355,27 @@ class LeaveCommentService extends ResponseService
         $approverName = $approver ? $approver->full_name : 'Aprobador';
         $approverPhoto = $approver ? $approver->user->photo : null;
         $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
-
+    
+        // Generar mensaje dinámico basado en la acción
         $message = match ($action) {
             'Primera aprobación' => "Tu solicitud de permiso para el {$startDate} ha sido aprobada por {$approverName}.",
+            'Segunda aprobación' => "Tu solicitud de permiso para el {$startDate} ha sido aprobada por {$approverName} en el segundo nivel.",
             'Aprobación final' => "Tu solicitud de permiso para el {$startDate} ha sido aprobada definitivamente por {$approverName}.",
             'Rechazado' => "Tu solicitud de permiso para el {$startDate} ha sido rechazada por {$approverName}.",
             'Corregir' => "Tu solicitud de permiso para el {$startDate} ha sido marcada para corrección por {$approverName}.",
             default => 'Acción realizada.',
         };
-
+    
         // Obtener el usuario asociado al empleado que recibe la notificación
         $user = User::where('employee_id', $leave->employee_id)->first();
-
+    
         if (!$user) {
             throw new \Exception("No se encontró el usuario asociado al empleado con ID: {$leave->employee_id}");
         }
-
+    
+        // Crear la notificación
         $notification = Notification::create([
-            'user_id' => $user->id,  // Usuario que recibe la notificación
+            'user_id' => $user->id,
             'type' => $action,
             'data' => [
                 'leave_id' => $leave->id,
@@ -367,10 +384,11 @@ class LeaveCommentService extends ResponseService
                 'approver_photo' => $approverPhoto,
             ],
         ]);
-
+    
+        // Disparar evento de notificación
         event(new NotificationEvent($notification));
     }
-
+    
     private function createPendingNotification(Leave $leave, int $approver_id)
     {
         $approver = Employee::find($approver_id);
