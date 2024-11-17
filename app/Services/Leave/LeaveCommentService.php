@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Mail\LeaveActionNotificationMail;
 use App\Mail\PendingApprovalNotificationMail;
+use App\Models\Organization\Position;
 use Illuminate\Support\Facades\Mail;
-
+use Illuminate\Support\Facades\Log;
 class LeaveCommentService extends ResponseService
 {
     public function updateCommentAction(int $employee_id, int $comment_id, array $data): JsonResponse
@@ -65,6 +66,10 @@ class LeaveCommentService extends ResponseService
             return $this->successResponse('Acción realizada con éxito', $comment);
         } catch (\Exception $e) {
             DB::rollBack();
+
+              
+        // Registrar el error en los logs
+        Log::error('Error al realizar la acción sobre el comentario: ' . $e->getMessage(), ['exception' => $e]);
             return $this->errorResponse('Error al realizar la acción: ' . $e->getMessage(), 500);
         }
     }
@@ -74,14 +79,14 @@ class LeaveCommentService extends ResponseService
     {
         $approver = Employee::findOrFail($approver_id);
         $applicant = $leave->employee;
-    
+
         $approverName = $approver->full_name;
         $actionDescription = match ($action) {
             'Aprobado' => 'aprobado',
             'Rechazado' => 'rechazado',
             default => 'realizado una acción sobre',
         };
-    
+
         // Determinar si es la primera aprobación, la aprobación final o un rechazo
         $isRejection = $action === 'Rechazado';
         $isFinalApproval = !$this->getNextApprover($leave, $approver_id) && !$isRejection;
@@ -89,13 +94,13 @@ class LeaveCommentService extends ResponseService
         $headerColor = $isRejection ? 'red' : ($isFinalApproval ? 'green' : 'blue');
         $subjectApplicant = "Tu solicitud de permiso ha sido {$actionDescription} - {$approvalStage}";
         $subjectApprover = "Notificación de Acción Realizada";
-    
+
         // Datos adicionales para el correo
         $nextApprover = $isRejection ? null : $this->getNextApprover($leave, $approver_id);
         $evaluationDate = Carbon::now()->format('d/m/Y H:i');
         $comment = $leave->comments()->where('commented_by', $approver_id)->orderBy('created_at', 'desc')->first()->comment ?? '';
         $rejectionReason = $isRejection ? $leave->comments()->where('commented_by', $approver_id)->orderBy('created_at', 'desc')->first()->rejectionReason->reason ?? '' : '';
-    
+
         $mailData = [
             'employeeName' => $applicant->getFullNameAttribute(),
             'startDate' => $leave->start_date ? Carbon::parse($leave->start_date)->format('d/m/Y') : 'N/A',
@@ -115,11 +120,11 @@ class LeaveCommentService extends ResponseService
             'nextApprover' => $nextApprover ? $nextApprover->getFullNameAttribute() : null,
             'headerColor' => $headerColor,
         ];
-    
+
         Mail::to($applicant->user->email)->send(new LeaveActionNotificationMail($mailData, $subjectApplicant));
         Mail::to($approver->user->email)->send(new ApproverActionNotificationMail($mailData, $subjectApprover));  // Nuevo correo al aprobador
     }
-    
+
     // Añadir este método para calcular la duración del permiso
     private function calculateDuration(Leave $leave)
     {
@@ -159,26 +164,155 @@ class LeaveCommentService extends ResponseService
     }
 
 
-    private function handleApproval(Leave $leave, int $employee_id)
+    private function handleApproval(Leave $leave, int $approver_id)
     {
-        $nextApprover = $this->getNextApprover($leave, $employee_id);
+        $nextApprover = $this->getNextApprover($leave, $approver_id);
+    
         if ($nextApprover) {
+            // Crear comentario para el siguiente aprobador
             LeaveComment::create([
                 'leave_id' => $leave->id,
                 'commented_by' => $nextApprover->id,
                 'action' => 'Pendiente',
             ]);
+    
+            // Actualizar el estado a Pendiente para el siguiente nivel de aprobación
             $leave->update(['state_id' => $this->getStateId('Pendiente')]);
-            $this->createNotification($leave, $employee_id, 'Primera aprobación');
+    
+            // Crear notificaciones y enviar correo
+            $this->createNotification($leave, $approver_id, 'Primera aprobación');
             $this->createPendingNotification($leave, $nextApprover->id);
             $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
+    
         } else {
+            // Si no hay más aprobadores, aprobar definitivamente
             $leave->update(['state_id' => $this->getStateId('Aprobado')]);
-            $this->createNotification($leave, $employee_id, 'Aprobación final');
+            $this->createNotification($leave, $approver_id, 'Aprobación final');
         }
     }
+    
+    
+    
 
-
+    private function getNextApprover(Leave $leave, int $approver_id)
+    {
+        // Verificar si el permiso ya está aprobado
+        if ($leave->state_id === $this->getStateId('Aprobado')) {
+            return null; // Fin del flujo
+        }
+    
+        // Obtener al solicitante del permiso
+        $applicant = Employee::with('position.unit.direction')->find($leave->employee_id);
+    
+        if (!$applicant || !$applicant->position) {
+            throw new \Exception("No se pudo determinar la posición del solicitante");
+        }
+    
+        $position = $applicant->position;
+    
+        // Obtener la unidad del Administrador (Jefe de Talento Humano)
+        $admin = Employee::whereHas('user.role', function ($query) {
+            $query->where('name', 'Administrador');
+        })->first();
+    
+        if (!$admin || !$admin->position->unit) {
+            throw new \Exception("No se pudo determinar la unidad del Jefe de talento humano");
+        }
+    
+        $talentoHumanoUnitId = $admin->position->unit->id;
+    
+        // Obtener al Jefe General
+        $jefeGeneral = Employee::whereHas('user.role', function ($query) {
+            $query->where('name', 'Jefe General');
+        })->first();
+    
+        if (!$jefeGeneral) {
+            throw new \Exception("No se pudo determinar al Jefe General");
+        }
+    
+        // Verificar el historial de aprobaciones para determinar el nivel actual
+        $comments = $leave->comments()->orderBy('created_at')->get();
+        $currentLevel = $comments->count();
+    
+        // Caso 6: Solicitante es Jefe General
+        if ($applicant->id === $jefeGeneral->id) {
+            if ($currentLevel === 0) {
+                return $admin; // Solo el Administrador aprueba
+            }
+            if ($currentLevel === 1) {
+                return null; // Fin del flujo
+            }
+        }
+    
+        // Caso 5: Solicitante es Jefe de Dirección
+        if ($position->is_manager && $position->direction && !$position->unit) {
+            if ($currentLevel === 0) {
+                return $jefeGeneral; // Nivel 1: Jefe General
+            }
+            if ($currentLevel === 1) {
+                return ($admin && $admin->id === $approver_id) ? null : $admin; // Nivel 2: Administrador
+            }
+        }
+    
+        // Caso 4: Solicitante es Jefe de una Unidad
+        if ($position->is_manager && $position->unit) {
+            if ($position->unit->id === $talentoHumanoUnitId) {
+                // Subcaso 4.1: Solicitante es el Jefe de Talento Humano
+                if ($currentLevel === 0) {
+                    return $position->unit->direction->managerEmployee->employee ?? null;
+                }
+                if ($currentLevel === 1) {
+                    return null; // Fin del flujo
+                }
+            } else {
+                // Subcaso 4.2: Solicitante es Jefe de otra Unidad
+                if ($currentLevel === 0) {
+                    return $position->unit->direction->managerEmployee->employee ?? null;
+                }
+                if ($currentLevel === 1) {
+                    return ($admin && $admin->id === $approver_id) ? null : $admin;
+                }
+            }
+        }
+    
+        // Caso 1: Empleado de una Unidad
+        if ($position->unit && $position->unit->id !== $talentoHumanoUnitId) {
+            if ($currentLevel === 0) {
+                return $position->unit->managerEmployee->employee ?? null;
+            }
+            if ($currentLevel === 1) {
+                return $position->unit->direction->managerEmployee->employee ?? null;
+            }
+            if ($currentLevel === 2) {
+                return ($admin && $admin->id === $approver_id) ? null : $admin;
+            }
+        }
+    
+        // Caso 2: Empleado de Talento Humano
+        if ($position->unit && $position->unit->id === $talentoHumanoUnitId) {
+            if ($currentLevel === 0) {
+                return $admin;
+            }
+            if ($currentLevel === 1) {
+                return $position->unit->direction->managerEmployee->employee ?? null;
+            }
+        }
+    
+        // Caso 3: Empleado de una Dirección (sin unidad)
+        if (!$position->unit && $position->direction) {
+            if ($currentLevel === 0) {
+                return $position->direction->managerEmployee->employee ?? null;
+            }
+            if ($currentLevel === 1) {
+                return ($admin && $admin->id === $approver_id) ? null : $admin;
+            }
+        }
+    
+        // Si no es un caso válido, retornar null
+        return null;
+    }
+    
+    
     private function sendPendingApprovalNotificationEmail(Leave $leave, Employee $nextApprover)
     {
         $applicant = $leave->employee;
@@ -242,7 +376,8 @@ class LeaveCommentService extends ResponseService
         $approver = Employee::find($approver_id);
         $approverName = $approver ? $approver->full_name : 'Aprobador';
         $approverPhoto = $approver ? $approver->user->photo : null;
-        $applicantPhoto = $leave->employee && $leave->employee->user && $leave->employee->user->photo ? $leave->employee->user->photo : null;        $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
+        $applicantPhoto = $leave->employee && $leave->employee->user && $leave->employee->user->photo ? $leave->employee->user->photo : null;
+        $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
 
         // Obtener el nombre del solicitante
         $applicant = Employee::find($leave->employee_id);
@@ -279,36 +414,9 @@ class LeaveCommentService extends ResponseService
         $leave->update(['state_id' => $this->getStateId($action)]);
     }
 
-    private function getNextApprover(Leave $leave, int $employee_id)
-    {
-        // Lógica para determinar el siguiente aprobador basado en la jerarquía
-        // Si el aprobador actual es el administrador, no se requiere otro aprobador
-        $currentApprover = Employee::with('user.role')->find($employee_id);
 
-        if (!$currentApprover || !$currentApprover->user || !$currentApprover->user->role) {
-            throw new \Exception("No se pudo determinar el rol del aprobador actual");
-        }
-
-        $currentRole = $currentApprover->user->role->name;
-
-        if ($currentRole === 'Administrador') {
-            return null;
-        }
-
-        // Obtener el siguiente aprobador que tenga el rol de Administrador
-        $nextApprover = Employee::whereHas('user', function ($query) {
-            $query->whereHas('role', function ($q) {
-                $q->where('name', 'Administrador');
-            });
-        })->first();
-
-        if (!$nextApprover) {
-            throw new \Exception("No se encontró el jefe de talento humano");
-        }
-
-        return $nextApprover;
-    }
-
+    
+    
     private function getStateId(string $stateName)
     {
         return LeaveState::where('name', $stateName)->first()->id;

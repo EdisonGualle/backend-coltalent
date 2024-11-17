@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use App\Mail\LeaveRequestedMail;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ApprovalNotificationMail;
+use Illuminate\Support\Facades\Log;
 
 class LeaveService extends ResponseService
 {
@@ -79,7 +80,7 @@ class LeaveService extends ResponseService
             $generalManager = Position::where('is_general_manager', true)->first();
     
             if (!$generalManager || !$generalManager->employee) {
-                throw new \Exception("No se encontró el jefe general");
+                throw new \Exception("No se encontró el alcalde");
             }
     
             return $generalManager->employee->id;
@@ -211,16 +212,19 @@ class LeaveService extends ResponseService
 public function getLeavesByFilter(int $employee_id, string $filter): JsonResponse
 {
     try {
-        // Obtener el usuario actual y su rol
+        // Obtener el empleado actual con su posición y rol
         $currentEmployee = Employee::with('user.role')->find($employee_id);
         if (!$currentEmployee) {
             throw new \Exception("Empleado no encontrado");
         }
+        
         $currentUserRole = $currentEmployee->user->role->name;
         $currentEmployeeId = $currentEmployee->id;
 
+        // Definir el query inicial de permisos
         $query = Leave::query();
 
+        // Aplicar el filtro basado en el estado solicitado
         switch ($filter) {
             case 'pendientes':
                 $query->whereHas('comments', function ($q) use ($currentEmployeeId) {
@@ -254,9 +258,11 @@ public function getLeavesByFilter(int $employee_id, string $filter): JsonRespons
             default:
                 break;
         }
+
         // Ordenar los resultados por el id en orden descendente
         $query->orderBy('id', 'desc');
 
+        // Cargar las relaciones necesarias para el listado
         $leaves = $query->with([
             'employee:id,identification,position_id,first_name,second_name,last_name,second_last_name',
             'employee.position:id,name,unit_id,direction_id',
@@ -267,22 +273,23 @@ public function getLeavesByFilter(int $employee_id, string $filter): JsonRespons
                 $query->withTrashed()->select('id', 'name');
             },
             'state:id,name',
-            'comments' => function ($query) {
-                $query->with([
-                    'rejectionReason' => function ($query) {
-                        $query->withTrashed();
-                    }
-                ]);
+            'comments' => function ($query) use ($currentEmployeeId, $filter) {
+                // Filtrar solo los comentarios asignados al aprobador actual en el estado correspondiente
+                $query->where('commented_by', $currentEmployeeId);
+                if ($filter === 'pendientes') {
+                    $query->where('action', 'Pendiente');
+                }
             },
             'comments.commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
             'comments.commentedBy.position:id,name'
         ])->get();
 
+      
         // Formatear y añadir los comentarios al permiso
         $leaves->each(function ($leave) use ($currentUserRole) {
             $comments = $leave->comments;
 
-            // Asignar comentarios
+            // Asignar comentarios a atributos personalizados
             $leave->setAttribute('comentario_1', $comments->first(function ($comment) {
                 return $comment->commentedBy->user->role->name !== 'Administrador';
             }));
@@ -291,7 +298,7 @@ public function getLeavesByFilter(int $employee_id, string $filter): JsonRespons
                 return $comment->commentedBy->user->role->name === 'Administrador';
             }));
 
-            // Formatear los comentarios
+            // Formatear los comentarios en los atributos
             foreach (['comentario_1', 'comentario_2'] as $commentKey) {
                 if ($leave->{$commentKey}) {
                     $comment = $leave->{$commentKey};
@@ -309,7 +316,7 @@ public function getLeavesByFilter(int $employee_id, string $filter): JsonRespons
                 }
             }
 
-            // Obtener la dirección de la unidad si existe, o directamente la dirección del puesto
+            // Obtener y asignar la dirección y unidad
             $direction = $leave->employee->position->unit
                 ? $leave->employee->position->unit->direction
                 : $leave->employee->position->direction;
@@ -324,13 +331,13 @@ public function getLeavesByFilter(int $employee_id, string $filter): JsonRespons
             $leave->employee->name = $leave->employee->getNameAttribute();
             $leave->employee->position_name = $leave->employee->position ? $leave->employee->position->name : null;
 
-            // Calcular la duración del permiso y requested_period usando setAttribute
+            // Calcular y asignar la duración y requested_period
             if ($leave->start_date && $leave->end_date) {
                 $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
                 $end_date = \DateTime::createFromFormat('Y-m-d', $leave->end_date);
                 if ($start_date && $end_date) {
                     $interval = $start_date->diff($end_date);
-                    $days = $interval->days + 1; // Incluye el último día
+                    $days = $interval->days + 1;
                     $leave->setAttribute('duration', $days . ' ' . ($days > 1 ? 'Días' : 'Día'));
                     $leave->setAttribute('requested_period', $start_date->format('d/m/Y') . "\n" . $end_date->format('d/m/Y'));
                 }
