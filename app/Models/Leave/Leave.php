@@ -46,7 +46,7 @@ class Leave extends Model
     // Mutators to format created_at and updated_at
     public function getCreatedAtAttribute($value)
     {
-        return Carbon::parse($value)->format('d/m/Y');
+        return Carbon::parse($value)->format('d/m/Y' );
     }
 
     public function getUpdatedAtAttribute($value)
