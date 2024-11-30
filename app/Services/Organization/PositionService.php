@@ -6,12 +6,13 @@ use App\Models\Organization\Position;
 use App\Services\ResponseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 
 class PositionService extends ResponseService
 {
     private function formatPositionData(Position $position): array
     {
-        $isActive = is_null($position->deleted_at) ? 'Activo' : 'Inactivo'; 
+        $isActive = is_null($position->deleted_at) ? 'Activo' : 'Inactivo';
         return array_merge(
             $position->only('id', 'name', 'function', 'is_manager', 'is_general_manager'),
             [
@@ -24,6 +25,13 @@ class PositionService extends ResponseService
                     'id' => $position->direction->id,
                     'name' => $position->direction->name,
                 ] : null,
+                'responsibilities' => $position->responsibilities->map(function ($responsibility) {
+                    return [
+                        'id' => $responsibility->id,
+                        'name' => $responsibility->name,
+                        'description' => $responsibility->description,
+                    ];
+                })->toArray(),
             ]
         );
     }
@@ -41,17 +49,18 @@ class PositionService extends ResponseService
                     if ($includeDeleted) {
                         $query->withTrashed();
                     }
-                }
+                },
+                'responsibilities'
             ]);
-    
+
             if ($includeDeleted) {
                 $query->withTrashed();
             }
-    
+
             $positions = $query->get()->map(function ($position) {
                 return $this->formatPositionData($position);
             });
-    
+
             return $this->successResponse('Lista de posiciones obtenida con éxito', $positions);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de posiciones: ' . $e->getMessage(), 500);
@@ -60,11 +69,29 @@ class PositionService extends ResponseService
     public function createPosition(array $data): JsonResponse
     {
         try {
+            DB::beginTransaction();
+
+            // Extraer responsabilidades del payload y excluirlo de los datos de Position
+            $responsibilities = $data['responsibilities'] ?? [];
+            unset($data['responsibilities']);
+
             $position = Position::create($data);
-            $position->load('unit', 'direction');
+
+            // Crear responsabilidades asociadas si existen
+            if (!empty($responsibilities)) {
+                foreach ($responsibilities as $responsibility) {
+                    $position->responsibilities()->create(['name' => $responsibility]);
+                }
+            }
+            // Confirmar la transacción
+            DB::commit();
+
+            // Cargar relaciones para devolver la respuesta completa
+            $position->load('unit', 'direction', 'responsibilities');
 
             return $this->successResponse('Posición creada con éxito', $this->formatPositionData($position), 201);
         } catch (\Exception $e) {
+            DB::rollBack();
             return $this->errorResponse('No se pudo crear la posición: ' . $e->getMessage(), 500);
         }
     }
@@ -82,15 +109,16 @@ class PositionService extends ResponseService
                     if ($includeDeleted) {
                         $query->withTrashed();
                     }
-                }
+                },
+                 'responsibilities'
             ]);
-    
+
             if ($includeDeleted) {
                 $query->withTrashed();
             }
-    
+
             $position = $query->findOrFail($id);
-    
+
             return $this->successResponse('Detalles de la posición obtenidos con éxito', $this->formatPositionData($position));
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Posición no encontrada', 404);
@@ -142,5 +170,5 @@ class PositionService extends ResponseService
         }
     }
 
-    
+
 }

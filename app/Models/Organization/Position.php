@@ -39,4 +39,10 @@ class Position extends Model
     {
         return $this->hasOne(Employee::class, 'position_id');
     }
+    
+     // Relación uno a muchos con PositionResponsibility
+     public function responsibilities()
+     {
+         return $this->hasMany(PositionResponsibility::class, 'position_id');
+     }
 }
