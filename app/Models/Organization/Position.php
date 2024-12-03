@@ -29,10 +29,10 @@ class Position extends Model
         return $this->belongsTo(Unit::class);
     }
 
-    public function direction()
-    {
-        return $this->belongsTo(Direction::class);
-    }
+        public function direction()
+        {
+            return $this->belongsTo(Direction::class);
+        }
 
     // Corregir la relación a employee en singular
     public function employee()

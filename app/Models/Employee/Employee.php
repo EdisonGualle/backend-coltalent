@@ -14,6 +14,7 @@ use Illuminate\Notifications\Notifiable;
 
 use App\Models\Employee\PersonalInfo\Address;
 use App\Models\Employee\PersonalInfo\Contact;
+use App\Models\Leave\Delegation;
 use App\Models\Leave\Leave;
 use App\Models\Leave\LeaveComment;
 use App\Models\Organization\Position;
@@ -73,6 +74,11 @@ class Employee extends Model
     public function comments()
     {
         return $this->hasMany(LeaveComment::class, 'commented_by');
+    }
+
+    public function delegations()
+    {
+        return $this->hasMany(Delegation::class, 'delegate_id');
     }
 
     // Obtener la foto del usuario

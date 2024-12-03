@@ -3,6 +3,7 @@
 namespace App\Models\Leave;
 
 use App\Models\Employee\Employee;
+use App\Models\Organization\PositionResponsibility;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -27,8 +28,14 @@ class Delegation extends Model
         return $this->belongsTo(Employee::class, 'delegate_id');
     }
 
+    // Relación muchos a muchos con PositionResponsibility
     public function responsibilities()
     {
-        return $this->hasMany(DelegationResponsibility::class, 'delegation_id');
+        return $this->belongsToMany(
+            PositionResponsibility::class,
+            'delegation_responsibilities', // Tabla intermedia
+            'delegation_id', // Clave foránea en la tabla intermedia hacia Delegation
+            'responsibility_id' // Clave foránea en la tabla intermedia hacia PositionResponsibility
+        );
     }
 }

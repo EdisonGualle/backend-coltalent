@@ -12,13 +12,13 @@ class Leave extends Model
     use HasFactory;
 
     protected $fillable = [
-        'employee_id', 
-        'leave_type_id', 
-        'start_date', 
-        'end_date', 
+        'employee_id',
+        'leave_type_id',
+        'start_date',
+        'end_date',
         'start_time',
-        'end_time', 
-        'reason', 
+        'end_time',
+        'reason',
         'attachment',
         'state_id'
     ];
@@ -35,7 +35,7 @@ class Leave extends Model
 
     public function state()
     {
-        return $this->belongsTo(LeaveState::class); 
+        return $this->belongsTo(LeaveState::class);
     }
 
     public function comments()
@@ -43,10 +43,17 @@ class Leave extends Model
         return $this->hasMany(LeaveComment::class);
     }
 
+    // Relación uno a muchos con Delegation
+    public function delegations()
+    {
+        return $this->hasMany(Delegation::class);
+    }
+
+
     // Mutators to format created_at and updated_at
     public function getCreatedAtAttribute($value)
     {
-        return Carbon::parse($value)->format('d/m/Y' );
+        return Carbon::parse($value)->format('d/m/Y');
     }
 
     public function getUpdatedAtAttribute($value)
