@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Mail\LeaveActionNotificationMail;
 use App\Mail\PendingApprovalNotificationMail;
+use App\Mail\SubrogationNotificationMail;
+use App\Models\Leave\Delegation;
 use App\Models\Organization\Position;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
@@ -39,6 +41,33 @@ class LeaveCommentService extends ResponseService
                 throw new \Exception("No se puede editar una aprobacion una vez interactuado");
             }
 
+            // **Validar existencia y correo electrónico del solicitante**
+            $applicant = $leave->employee;
+            if (!$applicant || !$applicant->user || !$applicant->user->email) {
+                throw new \Exception("El solicitante no tiene un correo electrónico válido");
+            }
+
+            // **Validar existencia y correo electrónico del aprobador**
+            $approver = Employee::find($employee_id);
+            if (!$approver || !$approver->user || !$approver->user->email) {
+                throw new \Exception("El aprobador no tiene un correo electrónico válido");
+            }
+
+            // Validar datos requeridos para la primera aprobación
+            if ($data['action'] === 'Aprobado') {
+                if (isset($data['is_first_approval']) && $data['is_first_approval']) {
+                    if (!isset($data['delegate_id']) || empty($data['delegate_id'])) {
+                        throw new \Exception("Debe asignar un subrogante en la primera aprobación.");
+                    }
+                    if (!isset($data['responsibilities']) || !is_array($data['responsibilities'])) {
+                        throw new \Exception("Debe asignar responsabilidades al subrogante.");
+                    }
+                    if (!isset($data['delegate_reason']) || empty($data['delegate_reason'])) {
+                        throw new \Exception("Debe proporcionar una razón específica para la delegación.");
+                    }
+                }
+            }
+
             // Actualizar el comentario con la nueva acción y posible razón de rechazo
             $comment->update([
                 'action' => $data['action'],
@@ -48,7 +77,7 @@ class LeaveCommentService extends ResponseService
 
             // Manejar las diferentes acciones
             if ($data['action'] === 'Aprobado') {
-                $this->handleApproval($leave, $employee_id);
+                $this->handleApproval($leave, $employee_id, $data);
             } elseif ($data['action'] === 'Rechazado' || $data['action'] === 'Corregir') {
                 $this->handleRejectionOrCorrection($leave, $data['action']);
                 $this->createNotification($leave, $employee_id, $data['action']);
@@ -67,9 +96,7 @@ class LeaveCommentService extends ResponseService
         } catch (\Exception $e) {
             DB::rollBack();
 
-              
-        // Registrar el error en los logs
-        Log::error('Error al realizar la acción sobre el comentario: ' . $e->getMessage(), ['exception' => $e]);
+
             return $this->errorResponse('Error al realizar la acción: ' . $e->getMessage(), 500);
         }
     }
@@ -121,8 +148,8 @@ class LeaveCommentService extends ResponseService
             'headerColor' => $headerColor,
         ];
 
-        Mail::to($applicant->user->email)->send(new LeaveActionNotificationMail($mailData, $subjectApplicant));
-        Mail::to($approver->user->email)->send(new ApproverActionNotificationMail($mailData, $subjectApprover));  // Nuevo correo al aprobador
+        Mail::to($applicant->user->email)->queue(new LeaveActionNotificationMail($mailData, $subjectApplicant));
+        Mail::to($approver->user->email)->queue(new ApproverActionNotificationMail($mailData, $subjectApprover));  // Nuevo correo al aprobador
     }
 
     // Añadir este método para calcular la duración del permiso
@@ -164,49 +191,162 @@ class LeaveCommentService extends ResponseService
     }
 
 
-    private function handleApproval(Leave $leave, int $approver_id)
+    private function handleApproval(Leave $leave, int $approver_id, array $data = [])
     {
-        $nextApprover = $this->getNextApprover($leave, $approver_id);
-    
-        // Determinar el nivel actual de aprobación basado en los comentarios existentes
-        $approvedComments = $leave->comments()->where('action', 'Aprobado')->count();
-        $approvalStage = match ($approvedComments) {
-            1 => 'Primera aprobación',
-            2 => 'Segunda aprobación',
-            3 => 'Aprobación final',
-            default => 'Acción realizada',
-        };
-    
-        if ($nextApprover) {
-            // Crear comentario para el siguiente aprobador
-            LeaveComment::create([
-                'leave_id' => $leave->id,
-                'commented_by' => $nextApprover->id,
-                'action' => 'Pendiente',
-            ]);
-    
-            // Actualizar el estado a Pendiente para el siguiente nivel de aprobación
-            $leave->update(['state_id' => $this->getStateId('Pendiente')]);
-    
-            // Crear notificación para la acción actual
-            $this->createNotification($leave, $approver_id, $approvalStage);
-    
-            // Crear notificación pendiente para el próximo aprobador
-            $this->createPendingNotification($leave, $nextApprover->id);
-    
-            // Enviar correo al próximo aprobador
-            $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
-        } else {
-            // Si no hay más aprobadores, aprobar definitivamente
-            $leave->update(['state_id' => $this->getStateId('Aprobado')]);
-    
-            // Crear notificación final de aprobación
-            $this->createNotification($leave, $approver_id, 'Aprobación final');
+        DB::beginTransaction();
+        try {
+
+
+            $nextApprover = $this->getNextApprover($leave, $approver_id);
+
+            // Determinar el nivel actual de aprobación basado en los comentarios existentes
+            $approvedComments = $leave->comments()->where('action', 'Aprobado')->count();
+            $approvalStage = match ($approvedComments) {
+                1 => 'Primera aprobación',
+                2 => 'Segunda aprobación',
+                3 => 'Aprobación final',
+                default => 'Acción realizada',
+            };
+
+            if ($approvedComments === 1 && isset($data['is_first_approval']) && $data['is_first_approval']) {
+                // Crear la subrogación
+                $this->createSubrogation($leave, $data['delegate_id'], $data['responsibilities'], $data['delegate_reason']);
+            }
+
+
+            if ($nextApprover) {
+                // Crear comentario para el siguiente aprobador
+                LeaveComment::create([
+                    'leave_id' => $leave->id,
+                    'commented_by' => $nextApprover->id,
+                    'action' => 'Pendiente',
+                ]);
+
+                // Actualizar el estado a Pendiente para el siguiente nivel de aprobación
+                $leave->update(['state_id' => $this->getStateId('Pendiente')]);
+
+                // Crear notificación para la acción actual
+                $this->createNotification($leave, $approver_id, $approvalStage);
+
+                // Crear notificación pendiente para el próximo aprobador
+                $this->createPendingNotification($leave, $nextApprover->id);
+
+                // Enviar correo al próximo aprobador
+                $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
+            } else {
+                // Si no hay más aprobadores, aprobar definitivamente
+                $leave->update(['state_id' => $this->getStateId('Aprobado')]);
+
+                // Crear notificación final de aprobación
+                $this->createNotification($leave, $approver_id, 'Aprobación final');
+
+                // Notificar al subrogante asignado, si existe una delegación
+                if ($leave->delegations()->exists()) {
+                    $delegation = $leave->delegations()->first();
+                    $this->notifyDelegate($delegation);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            // Registrar el error para depuración
+            Log::error('Error durante la aprobación del permiso: ' . $e->getMessage(), ['exception' => $e]);
+
+            // Lanzar excepción para que sea manejada en el flujo principal
+            throw $e;
         }
     }
-    
-    
-    
+
+    private function createSubrogation(Leave $leave, int $delegateId, array $responsibilities, string $delegateReason)
+    {
+        try {
+
+
+            // Crear la delegación
+            $delegation = $leave->delegations()->create([
+                'delegate_id' => $delegateId,
+                'reason' => $delegateReason,
+                'status' => 'Pendiente',
+            ]);
+
+            // Asociar responsabilidades
+            $delegation->responsibilities()->attach($responsibilities);
+
+
+        } catch (\Exception $e) {
+            throw $e; // Re-lanzar la excepción para que se maneje en el nivel superior
+        }
+    }
+
+    private function notifyDelegate(Delegation $delegation)
+    {
+        $leave = $delegation->leave;
+        $delegate = $delegation->delegate;
+
+        // Obtener el primer comentario que contiene la acción 'Aprobado' en el permiso
+        $firstApproverComment = $leave->comments()
+            ->where('action', 'Aprobado')
+            ->orderBy('created_at', 'asc') // Orden ascendente para tomar el primero
+            ->first();
+
+        if (!$firstApproverComment) {
+            throw new \Exception("No se pudo determinar quién asignó la subrogación.");
+        }
+
+        // Obtener al aprobador inicial desde el comentario
+        $assigner = Employee::find($firstApproverComment->commented_by);
+
+        if (!$assigner) {
+            throw new \Exception("No se encontró al empleado que asignó la subrogación.");
+        }
+
+        // Convertir manualmente las fechas a Carbon si son cadenas
+        $startDate = is_string($leave->start_date) ? Carbon::parse($leave->start_date) : $leave->start_date;
+        $endDate = is_string($leave->end_date) ? Carbon::parse($leave->end_date) : $leave->end_date;
+
+        // Actualizar el estado de la delegación a 'Activa'
+        $delegation->update(['status' => 'Activa']);
+
+        // Preparar los datos para la notificación
+        $assignerPhoto = $assigner->user->photo ?? null; // Obtener la foto del asignador si está disponible
+        $message = "📢 ¡Atención! Has sido designado por {$assigner->full_name} como delegado para cubrir responsabilidades desde el 📅 {$startDate->format('d/m/Y')} hasta el " .
+            ($endDate ? "📅 {$endDate->format('d/m/Y')}" : "una fecha indefinida") . ". ⚠️ Por favor, revisa los detalles de tus asignaciones.";
+
+        // Crear la notificación
+        $notification = Notification::create([
+            'user_id' => $delegate->user->id, // Usuario que recibe la notificación
+            'type' => 'Subrogación asignada',
+            'data' => [
+                'assigner_name' => $assigner->full_name,
+                'assigner_photo' => $assignerPhoto,
+                'start_date' => $startDate->format('d/m/Y'),
+                'end_date' => $endDate ? $endDate->format('d/m/Y') : 'Indefinida',
+                'message' => $message,
+            ],
+        ]);
+
+        // Disparar evento de notificación push
+        event(new NotificationEvent($notification));
+
+        // Preparar los datos para el correo
+        $details = [
+            'delegateName' => $delegate->getFullNameAttribute(), // Nombre del subrogante
+            'assignerName' => $assigner->getFullNameAttribute(), // Nombre del asignador desde el primer comentario
+            'startDate' => $startDate->format('d/m/Y'), // Convertir a formato deseado
+            'endDate' => $endDate ? $endDate->format('d/m/Y') : 'Indefinida',
+            'responsibilities' => $delegation->responsibilities->pluck('name')->toArray(), // Responsabilidades asignadas
+            'reason' => $delegation->reason, // Razón de la subrogación
+        ];
+
+        // Enviar el correo al subrogante en segundo plano
+        Mail::to($delegate->user->email)->queue(new SubrogationNotificationMail($details));
+    }
+
+
+
+
 
     private function getNextApprover(Leave $leave, int $approver_id)
     {
@@ -214,40 +354,40 @@ class LeaveCommentService extends ResponseService
         if ($leave->state_id === $this->getStateId('Aprobado')) {
             return null; // Fin del flujo
         }
-    
+
         // Obtener al solicitante del permiso
         $applicant = Employee::with('position.unit.direction')->find($leave->employee_id);
-    
+
         if (!$applicant || !$applicant->position) {
             throw new \Exception("No se pudo determinar la posición del solicitante");
         }
-    
+
         $position = $applicant->position;
-    
+
         // Obtener la unidad del Administrador (Jefe de Talento Humano)
         $admin = Employee::whereHas('user.role', function ($query) {
             $query->where('name', 'Administrador');
         })->first();
-    
+
         if (!$admin || !$admin->position->unit) {
             throw new \Exception("No se pudo determinar la unidad del Jefe de talento humano");
         }
-    
+
         $talentoHumanoUnitId = $admin->position->unit->id;
-    
+
         // Obtener al Jefe General
         $jefeGeneral = Employee::whereHas('user.role', function ($query) {
             $query->where('name', 'Jefe General');
         })->first();
-    
+
         if (!$jefeGeneral) {
             throw new \Exception("No se pudo determinar al Jefe General");
         }
-    
+
         // Verificar el historial de aprobaciones para determinar el nivel actual
         $comments = $leave->comments()->orderBy('created_at')->get();
         $currentLevel = $comments->count();
-    
+
         // Caso 6: Solicitante es Jefe General
         if ($applicant->id === $jefeGeneral->id) {
             if ($currentLevel === 0) {
@@ -257,7 +397,7 @@ class LeaveCommentService extends ResponseService
                 return null; // Fin del flujo
             }
         }
-    
+
         // Caso 5: Solicitante es Jefe de Dirección
         if ($position->is_manager && $position->direction && !$position->unit) {
             if ($currentLevel === 0) {
@@ -267,7 +407,7 @@ class LeaveCommentService extends ResponseService
                 return ($admin && $admin->id === $approver_id) ? null : $admin; // Nivel 2: Administrador
             }
         }
-    
+
         // Caso 4: Solicitante es Jefe de una Unidad
         if ($position->is_manager && $position->unit) {
             if ($position->unit->id === $talentoHumanoUnitId) {
@@ -288,7 +428,7 @@ class LeaveCommentService extends ResponseService
                 }
             }
         }
-    
+
         // Caso 1: Empleado de una Unidad
         if ($position->unit && $position->unit->id !== $talentoHumanoUnitId) {
             if ($currentLevel === 0) {
@@ -301,7 +441,7 @@ class LeaveCommentService extends ResponseService
                 return ($admin && $admin->id === $approver_id) ? null : $admin;
             }
         }
-    
+
         // Caso 2: Empleado de Talento Humano
         if ($position->unit && $position->unit->id === $talentoHumanoUnitId) {
             if ($currentLevel === 0) {
@@ -311,7 +451,7 @@ class LeaveCommentService extends ResponseService
                 return $position->unit->direction->managerEmployee->employee ?? null;
             }
         }
-    
+
         // Caso 3: Empleado de una Dirección (sin unidad)
         if (!$position->unit && $position->direction) {
             if ($currentLevel === 0) {
@@ -321,12 +461,12 @@ class LeaveCommentService extends ResponseService
                 return ($admin && $admin->id === $approver_id) ? null : $admin;
             }
         }
-    
+
         // Si no es un caso válido, retornar null
         return null;
     }
-    
-    
+
+
     private function sendPendingApprovalNotificationEmail(Leave $leave, Employee $nextApprover)
     {
         $applicant = $leave->employee;
@@ -345,7 +485,7 @@ class LeaveCommentService extends ResponseService
 
         $subject = "Nueva Solicitud de Permiso Pendiente";
 
-        Mail::to($nextApprover->user->email)->send(new PendingApprovalNotificationMail($mailData, $subject));
+        Mail::to($nextApprover->user->email)->queue(new PendingApprovalNotificationMail($mailData, $subject));
     }
 
 
@@ -355,7 +495,7 @@ class LeaveCommentService extends ResponseService
         $approverName = $approver ? $approver->full_name : 'Aprobador';
         $approverPhoto = $approver ? $approver->user->photo : null;
         $startDate = Carbon::parse($leave->start_date)->format('d-m-Y');
-    
+
         // Generar mensaje dinámico basado en la acción
         $message = match ($action) {
             'Primera aprobación' => "✅ Tu solicitud para el {$startDate} ha sido aprobada por {$approverName}. ¡Sigue pendiente de la próxima aprobación! 🎯",
@@ -365,14 +505,14 @@ class LeaveCommentService extends ResponseService
             'Corregir' => "🔄 Necesitamos algunos ajustes en tu solicitud para el {$startDate}. Revisa los comentarios de {$approverName} y actualízala lo antes posible.",
             default => "ℹ️ Se realizó una acción sobre tu solicitud. Verifica los detalles.",
         };
-    
+
         // Obtener el usuario asociado al empleado que recibe la notificación
         $user = User::where('employee_id', $leave->employee_id)->first();
-    
+
         if (!$user) {
             throw new \Exception("No se encontró el usuario asociado al empleado con ID: {$leave->employee_id}");
         }
-    
+
         // Crear la notificación
         $notification = Notification::create([
             'user_id' => $user->id,
@@ -384,11 +524,11 @@ class LeaveCommentService extends ResponseService
                 'approver_photo' => $approverPhoto,
             ],
         ]);
-    
+
         // Disparar evento de notificación
         event(new NotificationEvent($notification));
     }
-    
+
     private function createPendingNotification(Leave $leave, int $approver_id)
     {
         $approver = Employee::find($approver_id);
@@ -421,6 +561,7 @@ class LeaveCommentService extends ResponseService
             ],
         ]);
 
+        // Disparar evento de notificación
         event(new NotificationEvent($notification));
     }
 
@@ -433,8 +574,8 @@ class LeaveCommentService extends ResponseService
     }
 
 
-    
-    
+
+
     private function getStateId(string $stateName)
     {
         return LeaveState::where('name', $stateName)->first()->id;

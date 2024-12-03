@@ -23,6 +23,7 @@ use App\Http\Controllers\Leave\LeaveStateController;
 use App\Http\Controllers\Leave\LeaveStatisticsController;
 use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Leave\RejectionReasonController;
+use App\Http\Controllers\Leave\SubrogationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\DirectionController;
 use App\Http\Controllers\Organization\OrganizationController;
@@ -70,7 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Configuración 
     Route::apiResource('configurations', ConfigurationController::class);
 
-    
+
     Route::post('logout', [AuthController::class, 'logout']);
 
     Route::apiResources([
@@ -140,8 +141,16 @@ Route::middleware('auth:sanctum')->group(function () {
         //Rutas específicas para los tipos de permisos
         Route::get('types-all', [LeaveTypeController::class, 'indexIncludingDeleted']);
         Route::post('types/toggle-status/{id}', [LeaveTypeController::class, 'toggleStatus']);
+
+        // Ruta para obtener candidatos para subrogación
+        Route::get('/{leaveId}/subrogation/candidates', [SubrogationController::class, 'getCandidates']);
+
     });
 
+         // Ruta para obtener las subrogaciones de un empleado
+         Route::get('/subrogations/employee/{employeeId}', [SubrogationController::class, 'listByEmployee']);
+
+         Route::get('/subrogations/history', [SubrogationController::class, 'listAllSubrogations']);
 
 
     //Employees
@@ -173,7 +182,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('comments/{comment}', [LeaveCommentController::class, 'update']);
         Route::patch('leaves/{leave}', [LeaveController::class, 'update']);
 
-         Route::put('work-schedules', [WorkScheduleController::class, 'updateMultiple']);
+        Route::put('work-schedules', [WorkScheduleController::class, 'updateMultiple']);
     });
 
 

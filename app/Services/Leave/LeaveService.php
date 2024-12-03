@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use App\Mail\LeaveRequestedMail;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ApprovalNotificationMail;
+use App\Models\Other\Configuration;
 use Illuminate\Support\Facades\Log;
 
 class LeaveService extends ResponseService
@@ -51,6 +52,15 @@ class LeaveService extends ResponseService
             // Crear la notificación para el primer aprobador
             $this->createPendingNotification($leave, $approverId);
 
+            // Enviar correo de constancia al empleado solicitante
+            $approver = Employee::findOrFail($approverId);
+
+            if (!$employee->user->email) {
+                throw new \Exception("El empleado no tiene un correo electrónico válido");
+            }
+
+            Mail::to($employee->user->email)->queue(new LeaveRequestedMail($employee, $leave, $approver));
+           
             DB::commit();
 
             return $this->successResponse('Solicitud de permiso creada con éxito', $leave, 201);
@@ -145,6 +155,11 @@ class LeaveService extends ResponseService
             throw new \Exception("No se encontró el usuario asociado al empleado con ID: {$approver_id}");
         }
 
+        // Validar que el usuario tenga una dirección de correo
+        if (!$user->email) {
+            throw new \Exception("El usuario no tiene una dirección de correo válida");
+        }
+
         $notification = Notification::create([
             'user_id' => $user->id,  // Usuario que recibe la notificación
             'type' => 'Solicitud pendiente',
@@ -159,7 +174,7 @@ class LeaveService extends ResponseService
         event(new NotificationEvent($notification));
 
         // Enviar el correo electrónico al aprobador
-        Mail::to($user->email)->send(new ApprovalNotificationMail($approver, $leave, $leave->employee));
+        Mail::to($user->email)->queue(new ApprovalNotificationMail($approver, $leave, $leave->employee));
     }
 
     public function updateLeave(int $employee_id, int $leave_id, array $data): JsonResponse
@@ -264,6 +279,7 @@ class LeaveService extends ResponseService
                 'employee.position.unit:id,name,direction_id',
                 'employee.position.unit.direction:id,name',
                 'employee.position.direction:id,name',
+                'employee.position.responsibilities:id,position_id,name',
                 'leaveType' => function ($query) {
                     $query->withTrashed()->select('id', 'name');
                 },
@@ -277,35 +293,62 @@ class LeaveService extends ResponseService
                         'commentedBy.position:id,name',
                     ]);
                 },
+                'delegations' => function ($query) {
+                    $query->with([
+                        'delegate:id,first_name,second_name,last_name,second_last_name',
+                        'responsibilities:id,name',
+                    ]);
+                },
             ])->get();
 
-            // Formatear y añadir los comentarios al permiso
-            $leaves->each(function ($leave) {
+            // Obtener la configuración para los días mínimos de subrogación
+            $minDaysForSubrogation = Configuration::where('key', 'min_days_for_subrogation')->value('value');
+
+            // Formatear datos
+            $leaves->each(function ($leave) use ($minDaysForSubrogation) {
                 $comments = $leave->comments;
 
-                // Enumerar y estructurar los comentarios en un array único
+                // Construir approval_steps
                 $formattedComments = [];
                 foreach ($comments as $index => $comment) {
-                    $interactionDate = $comment->created_at != $comment->updated_at ? $comment->updated_at : null;
-
-                    $formattedComments[] = [
+                    $stepData = [
                         'step' => $index + 1,
                         'id' => $comment->id,
-
                         'approver' => [
-                            'id' => $comment->commentedBy ? $comment->commentedBy->id : null,
-                            'full_name' => $comment->commentedBy ? $comment->commentedBy->getFullNameAttribute() : null,
-                            'short_name' => $comment->commentedBy ? $comment->commentedBy->getNameAttribute() : null,
-                            'photo' => $comment->commentedBy ? $comment->commentedBy->userPhoto() : null,
-                            'position' => $comment->commentedBy && $comment->commentedBy->position ? $comment->commentedBy->position->name : null,
+                            'id' => $comment->commentedBy?->id,
+                            'full_name' => $comment->commentedBy?->getFullNameAttribute(),
+                            'short_name' => $comment->commentedBy?->getNameAttribute(),
+                            'photo' => $comment->commentedBy?->userPhoto(),
+                            'position' => $comment->commentedBy?->position?->name,
                         ],
                         'decision' => [
-                            'action' => $comment->action ? $comment->action : null,
+                            'action' => $comment->action,
                             'comment' => $comment->comment,
-                            'rejection_reason' => $comment->rejectionReason ? $comment->rejectionReason->reason : null,
+                            'rejection_reason' => $comment->rejectionReason?->reason,
                         ],
-                        'interaction_date' => $interactionDate,
+                        'interaction_date' => $comment->created_at != $comment->updated_at ? $comment->updated_at : null,
                     ];
+
+                    // Agregar subrogation solo al primer paso
+                    if ($index === 0) {
+                        // Validar si la subrogación existe y formatearla
+                        $stepData['subrogation'] = $leave->delegations->map(function ($delegation) {
+                            return [
+                                'delegate' => [
+                                    'id' => $delegation->delegate?->id,
+                                    'full_name' => $delegation->delegate?->getFullNameAttribute(),
+                                    'short_name' => $delegation->delegate?->getNameAttribute(),
+                                ],
+                                'responsibilities' => $delegation->responsibilities->map(function ($responsibility) {
+                                    return [
+                                        'id' => $responsibility->id,
+                                        'name' => $responsibility->name,
+                                    ];
+                                }),
+                            ];
+                        });
+                    }
+                    $formattedComments[] = $stepData;
                 }
 
                 // Asignar los comentarios como un array único
@@ -338,6 +381,19 @@ class LeaveService extends ResponseService
                             'start' => $start_date->format('d/m/Y'),
                             'end' => $end_date->format('d/m/Y')
                         ];
+
+                        // Determinar si requiere subrogación
+                        $leave->requires_subrogation = $days >= $minDaysForSubrogation;
+
+                        if ($leave->requires_subrogation) {
+                            $leave->responsibilities = $leave->employee->position->responsibilities->map(function ($responsibility) {
+                                return [
+                                    'id' => $responsibility->id,
+                                    'name' => $responsibility->name,
+                                ];
+                            });
+                        }
+
                     }
                 } elseif ($leave->start_time && $leave->end_time) {
                     $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
@@ -347,22 +403,31 @@ class LeaveService extends ResponseService
                         $interval = $start_time->diff($end_time);
                         $hours = $interval->h;
                         $minutes = $interval->i;
-                        $leave->duration = $hours . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT) . ' Horas';
+
+                        if ($hours === 0) {
+                            $leave->duration = $minutes . ' ' . ($minutes > 1 ? 'Minutos' : 'Minuto');
+                        } else {
+                            $leave->duration = $hours . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT) . ' Horas';
+                        }
+
                         $leave->requested_period = [
                             'date' => $start_date->format('d/m/Y'),
                             'start_time' => $start_time->format('H:i'),
                             'end_time' => $end_time->format('H:i')
                         ];
+                        $leave->requires_subrogation = false;
                     }
                 } else {
-                    $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
                     $leave->duration = null;
-                    $leave->requested_period = $start_date ? ['date' => $start_date->format('d/m/Y')] : null;
+                    $leave->requested_period = null;
+                    $leave->requires_subrogation = false;
+                    $leave->responsibilities = [];
+
                 }
 
                 // Ocultar los campos innecesarios
                 $leave->employee->makeHidden(['first_name', 'second_name', 'last_name', 'second_last_name', 'position']);
-                $leave->makeHidden(['employee_id', 'leave_type_id', 'state_id', 'comments']);
+                $leave->makeHidden(['employee_id', 'leave_type_id', 'state_id', 'comments', 'delegations']);
             });
 
             return $this->successResponse('Solicitudes de permisos obtenidas con éxito', $leaves);
@@ -375,12 +440,15 @@ class LeaveService extends ResponseService
 
 
 
+
     // Obtener las solicitudes de permiso de un empleado que solicita el permiso
     public function getLeavesByEmployee(int $employee_id, string $filter): JsonResponse
     {
         try {
+            // Construir la consulta base para el empleado
             $query = Leave::where('employee_id', $employee_id);
 
+            // Aplicar filtros según el estado
             switch ($filter) {
                 case 'pendientes':
                     $query->whereHas('state', function ($q) {
@@ -404,64 +472,65 @@ class LeaveService extends ResponseService
                     break;
                 case 'todas':
                 default:
-                    // No filters, return all leaves for the employee
+                    // No aplicar filtros, obtener todas las solicitudes
                     break;
             }
 
-            // Ordenar los resultados por el id en orden descendente
+            // Ordenar los resultados por ID en orden descendente
             $query->orderBy('id', 'desc');
 
+            // Cargar las relaciones necesarias
             $leaves = $query->with([
                 'leaveType' => function ($query) {
                     $query->withTrashed()->select('id', 'name');
                 },
-                'state',
-                'comments',
+                'state:id,name',
                 'comments' => function ($query) {
                     $query->with([
                         'rejectionReason' => function ($query) {
                             $query->withTrashed();
-                        }
+                        },
+                        'commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
+                        'commentedBy.position:id,name',
                     ]);
                 },
-                'comments.commentedBy:id,position_id,first_name,second_name,last_name,second_last_name',
-                'comments.commentedBy.position:id,name',
+                'employee' => function ($query) {
+                    $query->select('id', 'identification', 'position_id', 'first_name', 'second_name', 'last_name', 'second_last_name')
+                        ->with([
+                            'position:id,unit_id,direction_id,name',
+                            'position.unit:id,direction_id,name',
+                            'position.unit.direction:id,name',
+                            'position.direction:id,name',
+                        ]);
+                },
             ])->get();
 
-            // Formatear los comentarios y otros campos
+            // Formatear los datos de cada solicitud
             $leaves->each(function ($leave) {
-                // Filtrar y segmentar los comentarios
-                $comentario_1 = null;
-                $comentario_2 = null;
-
-                $leave->comments->each(function ($comment) use (&$comentario_1, &$comentario_2) {
+                // Procesar comentarios
+                $formattedComments = $leave->comments->map(function ($comment, $index) {
                     $interactionDate = $comment->created_at != $comment->updated_at ? $comment->updated_at : null;
-                    $comment_data = [
+
+                    return [
+                        'step' => $index + 1,
                         'id' => $comment->id,
-                        'comment' => $comment->comment,
-                        'commented_by_full_name' => $comment->commentedBy ? $comment->commentedBy->getFullNameAttribute() : null,
-                        'commented_by_name' => $comment->commentedBy ? $comment->commentedBy->getNameAttribute() : null,
-                        'commented_by_position' => $comment->commentedBy && $comment->commentedBy->position ? $comment->commentedBy->position->name : null,
-                        'rejection_reason' => $comment->rejectionReason ? $comment->rejectionReason->reason : null,
-                        'action' => $comment->action ? $comment->action : null,
+                        'approver' => [
+                            'id' => $comment->commentedBy ? $comment->commentedBy->id : null,
+                            'full_name' => $comment->commentedBy ? $comment->commentedBy->getFullNameAttribute() : null,
+                            'short_name' => $comment->commentedBy ? $comment->commentedBy->getNameAttribute() : null,
+                            'photo' => $comment->commentedBy ? $comment->commentedBy->userPhoto() : null,
+                            'position' => $comment->commentedBy && $comment->commentedBy->position ? $comment->commentedBy->position->name : null,
+                        ],
+                        'decision' => [
+                            'action' => $comment->action ? $comment->action : null,
+                            'comment' => $comment->comment ? $comment->comment : null,
+                            'rejection_reason' => $comment->rejectionReason ? $comment->rejectionReason->reason : null,
+                        ],
                         'interaction_date' => $interactionDate,
                     ];
-
-                    // Asignar comentarios basados en el orden de los comentarios
-                    if ($comentario_1 === null) {
-                        $comentario_1 = $comment_data;
-                    } else {
-                        $comentario_2 = $comment_data;
-                    }
                 });
 
-                // Añadir comentarios segmentados a la solicitud
-                if ($comentario_1) {
-                    $leave->comentario_1 = $comentario_1;
-                }
-                if ($comentario_2) {
-                    $leave->comentario_2 = $comentario_2;
-                }
+                $leave->approval_steps = $formattedComments;
 
                 // Calcular la duración del permiso
                 if ($leave->start_date && $leave->end_date) {
@@ -471,7 +540,10 @@ class LeaveService extends ResponseService
                         $interval = $start_date->diff($end_date);
                         $days = $interval->days + 1; // Incluye el último día
                         $leave->duration = $days . ' ' . ($days > 1 ? 'Días' : 'Día');
-                        $leave->requested_period = $start_date->format('d/m/Y') . "\n" . $end_date->format('d/m/Y');
+                        $leave->requested_period = [
+                            'start' => $start_date->format('d/m/Y'),
+                            'end' => $end_date->format('d/m/Y'),
+                        ];
                     }
                 } elseif ($leave->start_time && $leave->end_time) {
                     $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
@@ -481,25 +553,37 @@ class LeaveService extends ResponseService
                         $interval = $start_time->diff($end_time);
                         $hours = $interval->h;
                         $minutes = $interval->i;
-                        if ($hours > 0) {
-                            if ($minutes > 0) {
-                                $leave->duration = $hours . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT) . ' Horas';
-                            } else {
-                                $leave->duration = $hours . ' ' . ($hours > 1 ? 'Horas' : 'Hora');
-                            }
-                        } else {
-                            $leave->duration = $minutes . ' Minutos';
-                        }
-                        // Formatear requested_period para mostrar la fecha y horas en líneas separadas
-                        $leave->requested_period = $start_date->format('d/m/Y') . "\n" . $start_time->format('H:i') . ' - ' . $end_time->format('H:i');
+                        $leave->duration = $hours . ':' . str_pad($minutes, 2, '0', STR_PAD_LEFT) . ' Horas';
+                        $leave->requested_period = [
+                            'date' => $start_date->format('d/m/Y'),
+                            'start_time' => $start_time->format('H:i'),
+                            'end_time' => $end_time->format('H:i'),
+                        ];
                     }
                 } else {
                     $start_date = \DateTime::createFromFormat('Y-m-d', $leave->start_date);
                     $leave->duration = null;
-                    $leave->requested_period = $start_date ? $start_date->format('d/m/Y') : null;
+                    $leave->requested_period = $start_date ? ['date' => $start_date->format('d/m/Y')] : null;
                 }
 
-                // Ocultar los campos innecesarios en Leave
+                // Obtener dirección y unidad del empleado
+                $direction = $leave->employee->position->unit
+                    ? $leave->employee->position->unit->direction
+                    : $leave->employee->position->direction;
+
+                $unit = $leave->employee->position->unit;
+
+                $leave->employee->direction_name = $direction ? $direction->name : null;
+                $leave->employee->unit_name = $unit ? $unit->name : null;
+
+                // Añadir full_name, name y position_name del empleado
+                $leave->employee->full_name = $leave->employee->getFullNameAttribute();
+                $leave->employee->short_name = $leave->employee->getNameAttribute();
+                $leave->employee->position_name = $leave->employee->position ? $leave->employee->position->name : null;
+
+
+                // Ocultar los campos innecesarios
+                $leave->employee->makeHidden(['first_name', 'second_name', 'last_name', 'second_last_name', 'position']);
                 $leave->makeHidden(['leave_type_id', 'state_id', 'comments']);
             });
 
