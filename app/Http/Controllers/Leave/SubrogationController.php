@@ -30,4 +30,10 @@ class SubrogationController extends Controller
     {
         return $this->subrogationService->getAllSubrogations();
     }
+
+    public function listAssignedByEmployee(int $employeeId)
+    {
+        return $this->subrogationService->getDelegationsAssignedByEmployee($employeeId);
+    }
+
 }

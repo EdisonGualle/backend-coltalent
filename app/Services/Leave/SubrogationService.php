@@ -61,7 +61,7 @@ class SubrogationService extends ResponseService
                     $query->whereIn('name', ['Pendiente', 'Aprobado']);
                 });
             });
-            
+
 
             // Excluir empleados que ya son subrogados en el mismo rango de fechas
             $query->whereDoesntHave('delegations', function ($q) use ($startDate, $endDate) {
@@ -76,7 +76,7 @@ class SubrogationService extends ResponseService
                     });
                 })->whereIn('status', ['Pendiente', 'Activa']);
             });
-            
+
 
             // Obtener empleados disponibles con relaciones necesarias
             $availableEmployees = $query->with(['position.unit', 'position.direction'])->get();
@@ -107,11 +107,10 @@ class SubrogationService extends ResponseService
         }
     }
 
-
+    // Obtener las subrogaciones de un empleado en específico (delegado)
     public function getSubrogationsByEmployee(int $employeeId): JsonResponse
     {
         try {
-            // Obtener las subrogaciones donde el empleado es el delegado
             $subrogations = Delegation::with([
                 'leave' => function ($query) {
                     $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
@@ -121,26 +120,36 @@ class SubrogationService extends ResponseService
                         ]);
                 },
                 'responsibilities:id,name',
+                'leave.comments' => function ($query) {
+                    $query->orderBy('created_at', 'asc')->limit(1)
+                        ->with('commentedBy:id,first_name,second_name,last_name,second_last_name,identification');
+                }
             ])->where('delegate_id', $employeeId)
                 ->where('status', 'Activa')
                 ->get();
 
-            // Formatear la respuesta
             $formatted = $subrogations->map(function ($subrogation) {
                 return [
                     'id' => $subrogation->id,
                     'status' => $subrogation->status,
-                    // Información del delegado (responsable)
-                    'delegated_to' => [
-                        'id' => $subrogation->delegate_id,
-                        'responsibilities' => $subrogation->responsibilities->map(function ($responsibility) {
-                            return [
-                                'id' => $responsibility->id,
-                                'name' => $responsibility->name,
-                            ];
-                        }),
+                    'reason' => $subrogation->reason,
+                    'delegated_by' => [
+                        'id' => $subrogation->leave->comments->first()?->commentedBy->id ?? null,
+                        'full_name' => trim(implode(' ', [
+                            $subrogation->leave->comments->first()?->commentedBy->first_name ?? '',
+                            $subrogation->leave->comments->first()?->commentedBy->second_name ?? '',
+                            $subrogation->leave->comments->first()?->commentedBy->last_name ?? '',
+                            $subrogation->leave->comments->first()?->commentedBy->second_last_name ?? '',
+                        ])) ?: 'N/A',
+                        'identification' => $subrogation->leave->comments->first()?->commentedBy->identification ?? 'N/A',
+                        'decision_date' => $subrogation->leave->comments->first()?->updated_at ?? null, // Fecha de decisión
                     ],
-                    // Información del permiso original que motivó la subrogación
+                    'responsibilities' => $subrogation->responsibilities->map(function ($responsibility) {
+                        return [
+                            'id' => $responsibility->id,
+                            'name' => $responsibility->name,
+                        ];
+                    }),
                     'original_leave' => [
                         'id' => $subrogation->leave->id,
                         'start_date' => $subrogation->leave->start_date,
@@ -150,12 +159,16 @@ class SubrogationService extends ResponseService
                         'requested_by' => [
                             'id' => $subrogation->leave->employee->id,
                             'identification' => $subrogation->leave->employee->identification,
-                            'full_name' => $subrogation->leave->employee->getFullNameAttribute(),
+                            'full_name' => trim(implode(' ', [
+                                $subrogation->leave->employee->first_name ?? '',
+                                $subrogation->leave->employee->second_name ?? '',
+                                $subrogation->leave->employee->last_name ?? '',
+                                $subrogation->leave->employee->second_last_name ?? '',
+                            ])) ?: 'N/A',
                         ],
                     ],
                 ];
             });
-
 
             return $this->successResponse('Subrogaciones obtenidas con éxito.', $formatted);
         } catch (\Exception $e) {
@@ -163,69 +176,174 @@ class SubrogationService extends ResponseService
         }
     }
 
-// Obtener todas las subrogaciones
-public function getAllSubrogations(): JsonResponse
-{
-    try {
-        // Obtener todas las subrogaciones con sus relaciones necesarias
-        $subrogations = Delegation::with([
-            'leave' => function ($query) {
-                $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
-                    ->with([
-                        'employee:id,identification,first_name,second_name,last_name,second_last_name',
-                        'state:id,name',
-                    ]);
-            },
-            'responsibilities:id,name', // Relación de responsabilidades
-            'delegate.position.unit.direction', // Relación con la unidad y su dirección
-            'delegate.position.direction', // Relación directa con la dirección del cargo
-        ])->get();
 
-        // Formatear la respuesta
-        $formatted = $subrogations->map(function ($subrogation) {
-            return [
-                'id' => $subrogation->id,
-                'status' => $subrogation->status,
-                'delegated_to' => [
-                    'id' => $subrogation->delegate_id,
-                    'full_name' => $subrogation->delegate->getFullNameAttribute() ?: 'Sin nombre',
-                    'identification' => $subrogation->delegate->identification ?? 'No especificado',
-                    'position' => [
-                        'id' => $subrogation->delegate->position->id ?? null,
-                        'name' => $subrogation->delegate->position->name ?? 'Sin posición',
-                        'unit' => $subrogation->delegate->position->unit->name ?? null, // Nombre de la unidad, si aplica
-                        'direction' => $subrogation->delegate->position->unit->direction->name // Dirección asociada a la unidad
-                            ?? $subrogation->delegate->position->direction->name // Dirección directamente del cargo
-                            ?? null, // Ninguna dirección
-                    ],
-                    'responsibilities' => $subrogation->responsibilities->map(function ($responsibility) {
-                        return [
-                            'id' => $responsibility->id,
-                            'name' => $responsibility->name,
-                        ];
-                    }),
-                ],
-                'original_leave' => [
-                    'id' => $subrogation->leave->id,
-                    'start_date' => $subrogation->leave->start_date,
-                    'end_date' => $subrogation->leave->end_date,
-                    'reason' => $subrogation->leave->reason,
-                    'state' => $subrogation->leave->state->name,
-                    'requested_by' => [
-                        'id' => $subrogation->leave->employee->id,
-                        'identification' => $subrogation->leave->employee->identification,
-                        'full_name' => $subrogation->leave->employee->getFullNameAttribute(),
-                    ],
-                ],
-            ];
-        });
+    // Obtener todas las subrogaciones
+    public function getAllSubrogations(): JsonResponse
+    {
+        try {
+            $subrogations = Delegation::with([
+                'leave' => function ($query) {
+                    $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
+                        ->with([
+                            'employee:id,identification,first_name,second_name,last_name,second_last_name',
+                            'state:id,name',
+                        ]);
+                },
+                'delegate:id,first_name,second_name,last_name,second_last_name,identification,position_id',
+                'delegate.position:id,name,unit_id,direction_id',
+                'delegate.position.unit:id,name,direction_id',
+                'delegate.position.unit.direction:id,name',
+                'responsibilities:id,name',
+                'leave.comments' => function ($query) {
+                    $query->orderBy('created_at', 'asc')->limit(1)
+                        ->with('commentedBy:id,first_name,second_name,last_name,second_last_name,identification');
+                }
+            ])->get();
 
-        return $this->successResponse('Historial de subrogaciones obtenido con éxito.', $formatted);
-    } catch (\Exception $e) {
-        return $this->errorResponse('Error al obtener el historial de subrogaciones: ' . $e->getMessage(), 500);
+            // Formatear la respuesta
+            $formatted = $subrogations->map(function ($subrogation) {
+                return [
+                    'id' => $subrogation->id,
+                    'status' => $subrogation->status,
+                    'reason' => $subrogation->reason, 
+                    'delegated_by' => [ // Información de quién asignó la delegación
+                        'id' => $subrogation->leave->comments->first()?->commentedBy->id ?? null,
+                        'full_name' => trim(implode(' ', [
+                            $subrogation->leave->comments->first()?->commentedBy->first_name ?? '',
+                            $subrogation->leave->comments->first()?->commentedBy->second_name ?? '',
+                            $subrogation->leave->comments->first()?->commentedBy->last_name ?? '',
+                            $subrogation->leave->comments->first()?->commentedBy->second_last_name ?? '',
+                        ])) ?: 'N/A',
+                        'identification' => $subrogation->leave->comments->first()?->commentedBy->identification ?? 'N/A',
+                        'decision_date' => $subrogation->leave->comments->first()?->updated_at ?? null, // Fecha de decisión
+                    ],
+                    'delegated_to' => [
+                        'id' => $subrogation->delegate->id,
+                        'full_name' => trim(implode(' ', [
+                            $subrogation->delegate->first_name ?? '',
+                            $subrogation->delegate->second_name ?? '',
+                            $subrogation->delegate->last_name ?? '',
+                            $subrogation->delegate->second_last_name ?? '',
+                        ])) ?: 'N/A',
+                        'identification' => $subrogation->delegate->identification,
+                        'position' => [
+                            'id' => $subrogation->delegate->position->id,
+                            'name' => $subrogation->delegate->position->name,
+                            'unit' => $subrogation->delegate->position->unit->name,
+                            'direction' => $subrogation->delegate->position->unit->direction->name,
+                        ],
+                        'responsibilities' => $subrogation->responsibilities->map(function ($responsibility) {
+                            return [
+                                'id' => $responsibility->id,
+                                'name' => $responsibility->name,
+                            ];
+                        }),
+                    ],
+                    'original_leave' => [
+                        'id' => $subrogation->leave->id,
+                        'start_date' => $subrogation->leave->start_date,
+                        'end_date' => $subrogation->leave->end_date,
+                        'reason' => $subrogation->leave->reason,
+                        'state' => $subrogation->leave->state->name,
+                        'requested_by' => [
+                            'id' => $subrogation->leave->employee->id,
+                            'identification' => $subrogation->leave->employee->identification,
+                            'full_name' => trim(implode(' ', [
+                                $subrogation->leave->employee->first_name ?? '',
+                                $subrogation->leave->employee->second_name ?? '',
+                                $subrogation->leave->employee->last_name ?? '',
+                                $subrogation->leave->employee->second_last_name ?? '',
+                            ])) ?: 'N/A',
+                        ],
+                    ],
+                ];
+            });
+
+            return $this->successResponse('Historial de subrogaciones obtenido con éxito.', $formatted);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Error al obtener el historial de subrogaciones: ' . $e->getMessage(), 500);
+        }
     }
-}
 
+    // Obtener las delegaciones asignadas por jefe inmediato
+    public function getDelegationsAssignedByEmployee(int $employeeId): JsonResponse
+    {
+        try {
+            $delegations = Delegation::with([
+                'leave' => function ($query) {
+                    $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
+                        ->with([
+                            'employee:id,identification,first_name,second_name,last_name,second_last_name',
+                            'state:id,name',
+                            'comments' => function ($query) {
+                                $query->orderBy('created_at', 'asc')->limit(1)
+                                    ->with('commentedBy:id,identification,first_name,second_name,last_name,second_last_name');
+                            },
+                        ]);
+                },
+                'delegate:id,identification,first_name,second_name,last_name,second_last_name,position_id', // Quien recibe la delegación
+                'delegate.position:id,name,unit_id,direction_id',
+                'delegate.position.unit:id,name,direction_id',
+                'delegate.position.unit.direction:id,name',
+                'responsibilities:id,name',
+            ])->whereHas('leave.comments', function ($query) use ($employeeId) {
+                $query->where('commented_by', $employeeId); // Filtrar por el empleado que asignó la delegación
+            })->get();
 
+            // Formatear la respuesta
+            $formatted = $delegations->map(function ($delegation) {
+                $firstComment = $delegation->leave->comments->first(); // Primer comentario relacionado
+                return [
+                    'id' => $delegation->id,
+                    'status' => $delegation->status,
+                    'reason' => $delegation->reason,
+                    'decision_date' => $firstComment?->updated_at ?? null, // Fecha de decisión del comentario
+                    'delegated_to' => [ // Información del empleado delegado
+                        'id' => $delegation->delegate->id,
+                        'full_name' => trim(implode(' ', [
+                            $delegation->delegate->first_name ?? '',
+                            $delegation->delegate->second_name ?? '',
+                            $delegation->delegate->last_name ?? '',
+                            $delegation->delegate->second_last_name ?? '',
+                        ])) ?: 'N/A',
+                        'identification' => $delegation->delegate->identification ?? 'N/A',
+                        'position' => [
+                            'id' => $delegation->delegate->position->id ?? null,
+                            'name' => $delegation->delegate->position->name ?? 'N/A',
+                            'unit' => $delegation->delegate->position->unit->name ?? 'N/A',
+                            'direction' => $delegation->delegate->position->unit->direction->name ?? 'N/A',
+                        ],
+                        'responsibilities' => $delegation->responsibilities->map(function ($responsibility) {
+                            return [
+                                'id' => $responsibility->id,
+                                'name' => $responsibility->name,
+                            ];
+                        }),
+                    ],
+                    'original_leave' => [
+                        'id' => $delegation->leave->id,
+                        'reason' => $delegation->leave->reason,
+                        'start_date' => $delegation->leave->start_date,
+                        'end_date' => $delegation->leave->end_date,
+                        'state' => $delegation->leave->state->name,
+                        'requested_by' => [
+                            'id' => $delegation->leave->employee->id,
+                            'identification' => $delegation->leave->employee->identification ?? 'N/A',
+                            'full_name' => trim(implode(' ', [
+                                $delegation->leave->employee->first_name ?? '',
+                                $delegation->leave->employee->second_name ?? '',
+                                $delegation->leave->employee->last_name ?? '',
+                                $delegation->leave->employee->second_last_name ?? '',
+                            ])) ?: 'N/A',
+                        ],
+                    ],
+                ];
+            });
+
+            return $this->successResponse('Delegaciones asignadas por el empleado obtenidas con éxito.', $formatted);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Error al obtener delegaciones: ' . $e->getMessage(), 500);
+        }
+    }
 
 }

@@ -64,7 +64,7 @@ class Employee extends Model
     }
 
 
-    // Relación con Leave
+    // Relación con Leave como solicitante
     public function leaves()
     {
         return $this->hasMany(Leave::class);

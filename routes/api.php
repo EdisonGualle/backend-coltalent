@@ -147,10 +147,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     });
 
-         // Ruta para obtener las subrogaciones de un empleado
-         Route::get('/subrogations/employee/{employeeId}', [SubrogationController::class, 'listByEmployee']);
+    // Ruta para obtener las subrogaciones de un empleado
+    Route::get('/subrogations/employee/{employeeId}', [SubrogationController::class, 'listByEmployee']);
 
-         Route::get('/subrogations/history', [SubrogationController::class, 'listAllSubrogations']);
+    Route::get('/subrogations/history', [SubrogationController::class, 'listAllSubrogations']);
+    Route::get('/subrogations/assigned-by/{employeeId}', [SubrogationController::class, 'listAssignedByEmployee']);
 
 
     //Employees
