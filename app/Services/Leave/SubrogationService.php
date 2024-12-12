@@ -7,6 +7,8 @@ use App\Models\Leave\Delegation;
 use App\Models\Leave\Leave;
 use App\Services\ResponseService;
 use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class SubrogationService extends ResponseService
 {
@@ -111,39 +113,56 @@ class SubrogationService extends ResponseService
     public function getSubrogationsByEmployee(int $employeeId): JsonResponse
     {
         try {
+
+            // Obtener todas las delegaciones asociadas al empleado
             $subrogations = Delegation::with([
                 'leave' => function ($query) {
                     $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
                         ->with([
-                            'employee:id,identification,first_name,second_name,last_name,second_last_name',
+                            'employee:id,identification,first_name,second_name,last_name,second_last_name,position_id',
+                            'employee.position:id,name',
                             'state:id,name',
+                            'comments' => function ($query) {
+                                $query->orderBy('created_at', 'asc');
+                            },
                         ]);
                 },
                 'responsibilities:id,name',
-                'leave.comments' => function ($query) {
-                    $query->orderBy('created_at', 'asc')->limit(1)
-                        ->with('commentedBy:id,first_name,second_name,last_name,second_last_name,identification');
-                }
             ])->where('delegate_id', $employeeId)
                 ->where('status', 'Activa')
                 ->get();
 
+            // Formatear las subrogaciones
             $formatted = $subrogations->map(function ($subrogation) {
+                $delegationStatus = $this->calculateDelegationStatus(
+                    $subrogation->leave?->start_date,
+                    $subrogation->leave?->end_date
+                );
+
+                // Obtener todos los comentarios del permiso asociado
+                $allComments = $subrogation->leave?->comments ?? collect();
+
+                // Tomar siempre el primer comentario si existe
+                $firstComment = $allComments->first();
+                $commentedBy = $firstComment?->commentedBy;
+
+                $delegatedBy = $commentedBy ? [
+                    'id' => $commentedBy->id,
+                    'full_name' => trim(implode(' ', [
+                        $commentedBy->first_name ?? '',
+                        $commentedBy->second_name ?? '',
+                        $commentedBy->last_name ?? '',
+                        $commentedBy->second_last_name ?? '',
+                    ])) ?: 'N/A',
+                    'identification' => $commentedBy->identification ?? 'N/A',
+                    'decision_date' => $firstComment?->updated_at ?? null,
+                ] : null;
+
                 return [
                     'id' => $subrogation->id,
-                    'status' => $subrogation->status,
+                    'status' => $delegationStatus,
                     'reason' => $subrogation->reason,
-                    'delegated_by' => [
-                        'id' => $subrogation->leave->comments->first()?->commentedBy->id ?? null,
-                        'full_name' => trim(implode(' ', [
-                            $subrogation->leave->comments->first()?->commentedBy->first_name ?? '',
-                            $subrogation->leave->comments->first()?->commentedBy->second_name ?? '',
-                            $subrogation->leave->comments->first()?->commentedBy->last_name ?? '',
-                            $subrogation->leave->comments->first()?->commentedBy->second_last_name ?? '',
-                        ])) ?: 'N/A',
-                        'identification' => $subrogation->leave->comments->first()?->commentedBy->identification ?? 'N/A',
-                        'decision_date' => $subrogation->leave->comments->first()?->updated_at ?? null, // Fecha de decisión
-                    ],
+                    'delegated_by' => $delegatedBy,
                     'responsibilities' => $subrogation->responsibilities->map(function ($responsibility) {
                         return [
                             'id' => $responsibility->id,
@@ -151,20 +170,25 @@ class SubrogationService extends ResponseService
                         ];
                     }),
                     'original_leave' => [
-                        'id' => $subrogation->leave->id,
-                        'start_date' => $subrogation->leave->start_date,
-                        'end_date' => $subrogation->leave->end_date,
-                        'reason' => $subrogation->leave->reason,
-                        'state' => $subrogation->leave->state->name,
+                        'id' => $subrogation->leave?->id ?? null,
+                        'start_date' => $subrogation->leave?->start_date
+                            ? Carbon::parse($subrogation->leave->start_date)->format('d/m/Y')
+                            : null,
+                        'end_date' => $subrogation->leave?->end_date
+                            ? Carbon::parse($subrogation->leave->end_date)->format('d/m/Y')
+                            : null,
+                        'reason' => $subrogation->leave?->reason ?? 'N/A',
+                        'state' => $subrogation->leave?->state?->name ?? 'N/A',
                         'requested_by' => [
-                            'id' => $subrogation->leave->employee->id,
-                            'identification' => $subrogation->leave->employee->identification,
+                            'id' => $subrogation->leave?->employee->id ?? null,
+                            'identification' => $subrogation->leave?->employee->identification ?? 'N/A',
                             'full_name' => trim(implode(' ', [
-                                $subrogation->leave->employee->first_name ?? '',
-                                $subrogation->leave->employee->second_name ?? '',
-                                $subrogation->leave->employee->last_name ?? '',
-                                $subrogation->leave->employee->second_last_name ?? '',
+                                $subrogation->leave?->employee?->first_name ?? '',
+                                $subrogation->leave?->employee?->second_name ?? '',
+                                $subrogation->leave?->employee?->last_name ?? '',
+                                $subrogation->leave?->employee?->second_last_name ?? '',
                             ])) ?: 'N/A',
+                            'position' => $subrogation->leave?->employee?->position?->name ?? 'No especificado',
                         ],
                     ],
                 ];
@@ -176,17 +200,24 @@ class SubrogationService extends ResponseService
         }
     }
 
-
     // Obtener todas las subrogaciones
     public function getAllSubrogations(): JsonResponse
     {
         try {
+            // Obtener solo las delegaciones con estado "Activa"
             $subrogations = Delegation::with([
                 'leave' => function ($query) {
                     $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
                         ->with([
-                            'employee:id,identification,first_name,second_name,last_name,second_last_name',
+                            'employee:id,identification,first_name,second_name,last_name,second_last_name,position_id',
+                            'employee.position:id,name,unit_id,direction_id',
                             'state:id,name',
+                            'comments' => function ($query) {
+                                $query->orderBy('created_at', 'asc')->with(
+                                    'commentedBy:id,first_name,second_name,last_name,second_last_name,identification,position_id',
+                                    'commentedBy.position:id,name,unit_id,direction_id'
+                                );
+                            },
                         ]);
                 },
                 'delegate:id,first_name,second_name,last_name,second_last_name,identification,position_id',
@@ -194,28 +225,50 @@ class SubrogationService extends ResponseService
                 'delegate.position.unit:id,name,direction_id',
                 'delegate.position.unit.direction:id,name',
                 'responsibilities:id,name',
-                'leave.comments' => function ($query) {
-                    $query->orderBy('created_at', 'asc')->limit(1)
-                        ->with('commentedBy:id,first_name,second_name,last_name,second_last_name,identification');
-                }
-            ])->get();
+            ])
+                ->where('status', 'Activa') // Filtrar delegaciones activas
+                ->get();
 
-            // Formatear la respuesta
             $formatted = $subrogations->map(function ($subrogation) {
+                // Obtener todos los comentarios asociados al permiso
+                $allComments = $subrogation->leave->comments;
+
+                // Obtener el primer comentario (delegador)
+                $firstComment = $allComments->first();
+
+                // Validar el autor del comentario
+                $commentedBy = $firstComment?->commentedBy;
+                if ($commentedBy) {
+                    $fullName = trim(implode(' ', [
+                        $commentedBy->first_name ?? '',
+                        $commentedBy->second_name ?? '',
+                        $commentedBy->last_name ?? '',
+                        $commentedBy->second_last_name ?? '',
+                    ])) ?: 'N/A';
+                    $position = [
+                        'id' => $commentedBy->position?->id ?? null,
+                        'name' => $commentedBy->position?->name ?? 'No especificado',
+                        'unit' => $commentedBy->position?->unit?->name ?? 'No especificado',
+                        'direction' => $commentedBy->position?->unit?->direction?->name ?? 'No especificado',
+                    ];
+                } else {
+                    $fullName = 'N/A';
+                    $position = null;
+                }
+
+                // Calcular el estado de la delegación
+                $status = $this->calculateDelegationStatus($subrogation->leave->start_date, $subrogation->leave->end_date);
+
                 return [
                     'id' => $subrogation->id,
-                    'status' => $subrogation->status,
-                    'reason' => $subrogation->reason, 
-                    'delegated_by' => [ // Información de quién asignó la delegación
-                        'id' => $subrogation->leave->comments->first()?->commentedBy->id ?? null,
-                        'full_name' => trim(implode(' ', [
-                            $subrogation->leave->comments->first()?->commentedBy->first_name ?? '',
-                            $subrogation->leave->comments->first()?->commentedBy->second_name ?? '',
-                            $subrogation->leave->comments->first()?->commentedBy->last_name ?? '',
-                            $subrogation->leave->comments->first()?->commentedBy->second_last_name ?? '',
-                        ])) ?: 'N/A',
-                        'identification' => $subrogation->leave->comments->first()?->commentedBy->identification ?? 'N/A',
-                        'decision_date' => $subrogation->leave->comments->first()?->updated_at ?? null, // Fecha de decisión
+                    'status' => $status,
+                    'reason' => $subrogation->reason,
+                    'delegated_by' => [
+                        'id' => $commentedBy?->id ?? null,
+                        'full_name' => $fullName,
+                        'identification' => $commentedBy?->identification ?? 'N/A',
+                        'decision_date' => $firstComment?->updated_at ?? null,
+                        'position' => $position,
                     ],
                     'delegated_to' => [
                         'id' => $subrogation->delegate->id,
@@ -225,12 +278,12 @@ class SubrogationService extends ResponseService
                             $subrogation->delegate->last_name ?? '',
                             $subrogation->delegate->second_last_name ?? '',
                         ])) ?: 'N/A',
-                        'identification' => $subrogation->delegate->identification,
+                        'identification' => $subrogation->delegate->identification ?? 'N/A',
                         'position' => [
-                            'id' => $subrogation->delegate->position->id,
-                            'name' => $subrogation->delegate->position->name,
-                            'unit' => $subrogation->delegate->position->unit->name,
-                            'direction' => $subrogation->delegate->position->unit->direction->name,
+                            'id' => $subrogation->delegate->position?->id ?? null,
+                            'name' => $subrogation->delegate->position?->name ?? 'No especificado',
+                            'unit' => $subrogation->delegate->position?->unit?->name ?? 'No especificado',
+                            'direction' => $subrogation->delegate->position?->unit?->direction?->name ?? 'No especificado',
                         ],
                         'responsibilities' => $subrogation->responsibilities->map(function ($responsibility) {
                             return [
@@ -241,19 +294,25 @@ class SubrogationService extends ResponseService
                     ],
                     'original_leave' => [
                         'id' => $subrogation->leave->id,
-                        'start_date' => $subrogation->leave->start_date,
-                        'end_date' => $subrogation->leave->end_date,
+                        'start_date' => Carbon::parse($subrogation->leave->start_date)->format('d/m/Y'),
+                        'end_date' => Carbon::parse($subrogation->leave->end_date)->format('d/m/Y'),
                         'reason' => $subrogation->leave->reason,
                         'state' => $subrogation->leave->state->name,
                         'requested_by' => [
                             'id' => $subrogation->leave->employee->id,
-                            'identification' => $subrogation->leave->employee->identification,
+                            'identification' => $subrogation->leave->employee->identification ?? 'N/A',
                             'full_name' => trim(implode(' ', [
                                 $subrogation->leave->employee->first_name ?? '',
                                 $subrogation->leave->employee->second_name ?? '',
                                 $subrogation->leave->employee->last_name ?? '',
                                 $subrogation->leave->employee->second_last_name ?? '',
                             ])) ?: 'N/A',
+                            'position' => [
+                                'id' => $subrogation->leave->employee->position?->id ?? null,
+                                'name' => $subrogation->leave->employee->position?->name ?? 'No especificado',
+                                'unit' => $subrogation->leave->employee->position?->unit?->name ?? 'No especificado',
+                                'direction' => $subrogation->leave->employee->position?->unit?->direction?->name ?? 'No especificado',
+                            ],
                         ],
                     ],
                 ];
@@ -261,7 +320,7 @@ class SubrogationService extends ResponseService
 
             return $this->successResponse('Historial de subrogaciones obtenido con éxito.', $formatted);
         } catch (\Exception $e) {
-            return $this->errorResponse('Error al obtener el historial de subrogaciones: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Error al obtener subrogaciones: ' . $e->getMessage(), 500);
         }
     }
 
@@ -269,36 +328,57 @@ class SubrogationService extends ResponseService
     public function getDelegationsAssignedByEmployee(int $employeeId): JsonResponse
     {
         try {
+            // Filtrar delegaciones con estado "Activa" antes de realizar cálculos
             $delegations = Delegation::with([
                 'leave' => function ($query) {
                     $query->select('id', 'employee_id', 'start_date', 'end_date', 'reason', 'state_id')
                         ->with([
-                            'employee:id,identification,first_name,second_name,last_name,second_last_name',
+                            'employee:id,identification,first_name,second_name,last_name,second_last_name,position_id',
+                            'employee.position:id,name,unit_id,direction_id',
+                            'employee.position.unit:id,name,direction_id',
+                            'employee.position.unit.direction:id,name',
+                            'employee.position.direction:id,name',
                             'state:id,name',
                             'comments' => function ($query) {
-                                $query->orderBy('created_at', 'asc')->limit(1)
-                                    ->with('commentedBy:id,identification,first_name,second_name,last_name,second_last_name');
+                                $query->orderBy('created_at', 'asc')->with('commentedBy:id,identification,first_name,second_name,last_name,second_last_name');
                             },
                         ]);
                 },
-                'delegate:id,identification,first_name,second_name,last_name,second_last_name,position_id', // Quien recibe la delegación
+                'delegate:id,identification,first_name,second_name,last_name,second_last_name,position_id',
                 'delegate.position:id,name,unit_id,direction_id',
                 'delegate.position.unit:id,name,direction_id',
                 'delegate.position.unit.direction:id,name',
+                'delegate.position.direction:id,name',
                 'responsibilities:id,name',
-            ])->whereHas('leave.comments', function ($query) use ($employeeId) {
-                $query->where('commented_by', $employeeId); // Filtrar por el empleado que asignó la delegación
-            })->get();
+            ])
+                ->where('status', 'Activa') // Filtrar delegaciones activas
+                ->whereHas('leave.comments', function ($query) use ($employeeId) {
+                    $query->where('commented_by', $employeeId);
+                })
+                ->get();
 
-            // Formatear la respuesta
-            $formatted = $delegations->map(function ($delegation) {
-                $firstComment = $delegation->leave->comments->first(); // Primer comentario relacionado
+
+            $formatted = $delegations->filter(function ($delegation) use ($employeeId) {
+                $firstComment = $delegation->leave->comments->first();
+
+                // Verificar si existe un primer comentario y si el comentario es realizado por el empleado indicado
+                if (!$firstComment || $firstComment->commentedBy->id !== $employeeId) {
+                    return false; // Excluir delegaciones donde el primer comentario no coincide
+                }
+
+                return true; // Incluir delegaciones válidas
+            })->map(function ($delegation) {
+                // Obtener el primer comentario
+                $firstComment = $delegation->leave->comments->first();
+
+                $status = $this->calculateDelegationStatus($delegation->leave->start_date, $delegation->leave->end_date);
+
                 return [
                     'id' => $delegation->id,
-                    'status' => $delegation->status,
+                    'status' => $status,
                     'reason' => $delegation->reason,
-                    'decision_date' => $firstComment?->updated_at ?? null, // Fecha de decisión del comentario
-                    'delegated_to' => [ // Información del empleado delegado
+                    'decision_date' => $firstComment?->updated_at ?? null,
+                    'delegated_to' => [
                         'id' => $delegation->delegate->id,
                         'full_name' => trim(implode(' ', [
                             $delegation->delegate->first_name ?? '',
@@ -308,10 +388,10 @@ class SubrogationService extends ResponseService
                         ])) ?: 'N/A',
                         'identification' => $delegation->delegate->identification ?? 'N/A',
                         'position' => [
-                            'id' => $delegation->delegate->position->id ?? null,
-                            'name' => $delegation->delegate->position->name ?? 'N/A',
-                            'unit' => $delegation->delegate->position->unit->name ?? 'N/A',
-                            'direction' => $delegation->delegate->position->unit->direction->name ?? 'N/A',
+                            'id' => $delegation->delegate->position?->id,
+                            'name' => $delegation->delegate->position?->name ?? 'N/A',
+                            'unit' => $delegation->delegate->position?->unit?->name ?? 'N/A',
+                            'direction' => $delegation->delegate->position?->direction?->name ?? $delegation->delegate->position?->unit?->direction?->name ?? 'No especificado',
                         ],
                         'responsibilities' => $delegation->responsibilities->map(function ($responsibility) {
                             return [
@@ -323,8 +403,8 @@ class SubrogationService extends ResponseService
                     'original_leave' => [
                         'id' => $delegation->leave->id,
                         'reason' => $delegation->leave->reason,
-                        'start_date' => $delegation->leave->start_date,
-                        'end_date' => $delegation->leave->end_date,
+                        'start_date' => Carbon::parse($delegation->leave->start_date)->format('d/m/Y'),
+                        'end_date' => Carbon::parse($delegation->leave->end_date)->format('d/m/Y'),
                         'state' => $delegation->leave->state->name,
                         'requested_by' => [
                             'id' => $delegation->leave->employee->id,
@@ -335,6 +415,12 @@ class SubrogationService extends ResponseService
                                 $delegation->leave->employee->last_name ?? '',
                                 $delegation->leave->employee->second_last_name ?? '',
                             ])) ?: 'N/A',
+                            'position' => [
+                                'id' => $delegation->leave->employee->position?->id,
+                                'name' => $delegation->leave->employee->position?->name ?? 'No especificado',
+                                'unit' => $delegation->leave->employee->position?->unit?->name ?? 'No especificado',
+                                'direction' => $delegation->leave->employee->position?->direction?->name ?? $delegation->leave->employee->position?->unit?->direction?->name ?? 'No especificado',
+                            ],
                         ],
                     ],
                 ];
@@ -344,6 +430,20 @@ class SubrogationService extends ResponseService
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener delegaciones: ' . $e->getMessage(), 500);
         }
+    }
+
+    private function calculateDelegationStatus(string $startDate, string $endDate): string
+    {
+        $currentDate = Carbon::now()->toDateString();
+        $start = Carbon::parse($startDate)->toDateString();
+        $end = Carbon::parse($endDate)->toDateString();
+
+        return match (true) {
+            $currentDate < $start => 'En espera',
+            $currentDate >= $start && $currentDate <= $end => 'En curso',
+            $currentDate > $end => 'Finalizada',
+            default => 'Estado desconocido',
+        };
     }
 
 }

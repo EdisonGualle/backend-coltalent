@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use App\Mail\LeaveRequestedMail;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ApprovalNotificationMail;
+use App\Models\Leave\Delegation;
 use App\Models\Other\Configuration;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +34,25 @@ class LeaveService extends ResponseService
             $data['employee_id'] = $employee_id;
             $data['state_id'] = LeaveState::where('name', 'Pendiente')->first()->id;
 
+            // Validación: verificar si el empleado tiene una subrogación activa para el rango de fechas
+            try {
+                $activeDelegationExists = Delegation::where('delegate_id', $employee_id)
+                    ->where('status', 'Activa') // Filtrar solo delegaciones activas
+                    ->whereHas('leave', function ($query) use ($data) {
+                        $query->where(function ($subQuery) use ($data) {
+                            $subQuery->whereBetween('start_date', [$data['start_date'], $data['end_date']])
+                                     ->orWhereBetween('end_date', [$data['start_date'], $data['end_date']]);
+                        });
+                    })
+                    ->exists();
+            
+                if ($activeDelegationExists) {
+                    return $this->errorResponse("El empleado tiene una subrogación activa para el rango de fechas solicitado.", 400);
+                }
+            } catch (\Exception $e) {
+                return $this->errorResponse("Error al verificar subrogaciones activas: " . $e->getMessage(), 500);
+            }
+            
             // Crear la solicitud de permiso
             $leave = Leave::create($data);
 
@@ -49,23 +69,35 @@ class LeaveService extends ResponseService
                 'action' => 'Pendiente'
             ]);
 
+            // Verificar que el aprobador tenga un usuario asociado antes de enviar la notificación
+            $approver = Employee::findOrFail($approverId);
+
+            if (!$approver->user) {
+                return $this->errorResponse("El aprobador no tiene un usuario asociado.", 400);
+            }
+
             // Crear la notificación para el primer aprobador
             $this->createPendingNotification($leave, $approverId);
 
             // Enviar correo de constancia al empleado solicitante
             $approver = Employee::findOrFail($approverId);
-
+            
             if (!$employee->user->email) {
-                throw new \Exception("El empleado no tiene un correo electrónico válido");
+                return $this->errorResponse("El empleado no tiene un correo electrónico válido.", 400);
             }
 
             Mail::to($employee->user->email)->queue(new LeaveRequestedMail($employee, $leave, $approver));
-           
+
             DB::commit();
 
             return $this->successResponse('Solicitud de permiso creada con éxito', $leave, 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
+            // Registrar el mensaje del error en los logs
+            Log::error('Error al crear la solicitud de permiso: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString() // Agregar el stack trace para mayor detalle
+            ]);
             return $this->errorResponse('No se pudo crear la solicitud de permiso: ' . $e->getMessage(), 500);
         }
     }

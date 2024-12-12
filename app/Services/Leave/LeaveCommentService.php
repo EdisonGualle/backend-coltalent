@@ -302,6 +302,14 @@ class LeaveCommentService extends ResponseService
             throw new \Exception("No se encontró al empleado que asignó la subrogación.");
         }
 
+        if (!$assigner->user || !$assigner->user->email) {
+            throw new \Exception("El asignador no tiene un usuario válido o un correo electrónico asociado.");
+        }
+    
+        if (!$delegate->user || !$delegate->user->email) {
+            throw new \Exception("El empleado delegado no tiene un usuario válido o un correo electrónico asociado.");
+        }
+
         // Convertir manualmente las fechas a Carbon si son cadenas
         $startDate = is_string($leave->start_date) ? Carbon::parse($leave->start_date) : $leave->start_date;
         $endDate = is_string($leave->end_date) ? Carbon::parse($leave->end_date) : $leave->end_date;
