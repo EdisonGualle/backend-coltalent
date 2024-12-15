@@ -13,6 +13,10 @@ class PositionService extends ResponseService
     private function formatPositionData(Position $position): array
     {
         $isActive = is_null($position->deleted_at) ? 'Activo' : 'Inactivo';
+    
+        // Determinar la dirección: desde la unidad o directamente de la posición
+        $direction = $position->unit ? $position->unit->direction : $position->direction;
+    
         return array_merge(
             $position->only('id', 'name', 'function', 'is_manager', 'is_general_manager'),
             [
@@ -20,11 +24,11 @@ class PositionService extends ResponseService
                 'unit' => $position->unit ? [
                     'id' => $position->unit->id,
                     'name' => $position->unit->name,
-                ] : null,
-                'direction' => $position->direction ? [
-                    'id' => $position->direction->id,
-                    'name' => $position->direction->name,
-                ] : null,
+                ] : ['id' => null, 'name' => 'N/A'], // Valor predeterminado para la unidad
+                'direction' => $direction ? [
+                    'id' => $direction->id,
+                    'name' => $direction->name,
+                ] : ['id' => null, 'name' => 'N/A'], // Valor predeterminado para la dirección
                 'responsibilities' => $position->responsibilities->map(function ($responsibility) {
                     return [
                         'id' => $responsibility->id,
@@ -35,6 +39,8 @@ class PositionService extends ResponseService
             ]
         );
     }
+    
+    
 
     public function getAllPositions(bool $includeDeleted = false): JsonResponse
     {
@@ -66,6 +72,8 @@ class PositionService extends ResponseService
             return $this->errorResponse('Error al obtener la lista de posiciones: ' . $e->getMessage(), 500);
         }
     }
+
+
     public function createPosition(array $data): JsonResponse
     {
         try {
@@ -130,16 +138,48 @@ class PositionService extends ResponseService
     public function updatePosition(string $id, array $data): JsonResponse
     {
         $position = Position::findOrFail($id);
-
+    
         try {
+            DB::beginTransaction();
+    
+            // Extraer responsabilidades del payload
+            $responsibilities = $data['responsibilities'] ?? [];
+            unset($data['responsibilities']);
+    
+            // Actualizar los datos del cargo
             $position->update($data);
-            $position->load('unit', 'direction');
-
+    
+            // Actualizar responsabilidades
+            if (!empty($responsibilities)) {
+                // Obtener IDs de las responsabilidades existentes
+                $existingResponsibilities = $position->responsibilities()->pluck('id', 'name')->toArray();
+    
+                // Crear nuevas responsabilidades
+                foreach ($responsibilities as $responsibilityName) {
+                    if (!array_key_exists($responsibilityName, $existingResponsibilities)) {
+                        $position->responsibilities()->create(['name' => $responsibilityName]);
+                    }
+                }
+    
+                // Eliminar responsabilidades que ya no existen
+                $responsibilitiesToDelete = array_diff(array_keys($existingResponsibilities), $responsibilities);
+                if (!empty($responsibilitiesToDelete)) {
+                    $position->responsibilities()->whereIn('name', $responsibilitiesToDelete)->delete();
+                }
+            }
+    
+            DB::commit();
+    
+            // Cargar relaciones para devolver la respuesta completa
+            $position->load('unit', 'direction', 'responsibilities');
+    
             return $this->successResponse('Posición actualizada con éxito', $this->formatPositionData($position));
         } catch (\Exception $e) {
+            DB::rollBack();
             return $this->errorResponse('No se pudo actualizar la posición: ' . $e->getMessage(), 500);
         }
     }
+    
 
     public function deletePosition(string $id): JsonResponse
     {

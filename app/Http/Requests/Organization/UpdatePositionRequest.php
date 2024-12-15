@@ -42,6 +42,8 @@ class UpdatePositionRequest extends FormRequest
                     }
                 },
             ],
+            'responsibilities' => 'nullable|array',
+            'responsibilities.*' => 'string|max:255', 
         ];
     }
 

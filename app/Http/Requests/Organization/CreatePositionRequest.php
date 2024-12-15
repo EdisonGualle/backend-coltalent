@@ -42,8 +42,8 @@ class CreatePositionRequest extends FormRequest
                     }
                 },
             ],
-            'responsibilities' => 'nullable|array', // Validación para asegurarse de que es un array
-        'responsibilities.*' => 'string|max:255',
+            'responsibilities' => 'nullable|array', 
+            'responsibilities.*' => 'string|max:255',
         ];
     }
 
