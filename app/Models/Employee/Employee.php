@@ -2,6 +2,7 @@
 
 namespace App\Models\Employee;
 
+use App\Models\Contracts\Contract;
 use App\Models\Employee\Backgrounds\Language;
 use App\Models\Employee\Backgrounds\Publication;
 use App\Models\Employee\Backgrounds\WorkExperience;
@@ -63,7 +64,18 @@ class Employee extends Model
         return $Name !== '' ? $Name : null;
     }
 
-
+       // Relación uno a muchos
+       public function contracts()
+       {
+           return $this->hasMany(Contract::class, 'employee_id');
+       }
+   
+       // Obtener el contrato actual
+       public function currentContract()
+       {
+           return $this->hasOne(Contract::class, 'employee_id')->where('is_active', true);
+       }
+       
     // Relación con Leave como solicitante
     public function leaves()
     {

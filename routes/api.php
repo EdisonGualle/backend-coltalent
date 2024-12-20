@@ -4,6 +4,8 @@ use App\Http\Controllers\Address\AddressController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\ConfigurationController;
+use App\Http\Controllers\Contracts\ContractController;
+use App\Http\Controllers\Contracts\ContractTypeController;
 use App\Http\Controllers\DashboardStatisticsController;
 use App\Http\Controllers\Employee\Backgrounds\LanguageController;
 use App\Http\Controllers\Employee\Backgrounds\PublicationController;
@@ -33,6 +35,8 @@ use App\Http\Controllers\ReportExcel\LeaveExportController;
 use App\Http\Controllers\Reports\LeaveReportController;
 use App\Http\Controllers\Reports\ReportController;
 use App\Http\Controllers\Role\RoleController;
+use App\Http\Controllers\Schedules\EmployeeScheduleController;
+use App\Http\Controllers\Schedules\ScheduleController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Controllers\User\UserStateController;
 use Illuminate\Support\Facades\Route;
@@ -197,6 +201,45 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('directions/{directionId}/units-positions', [OrganizationController::class, 'getUnitsAndPositions']);
     Route::get('units/{unitId}/positions', [OrganizationController::class, 'getPositions']);
 
+
+
+    Route::prefix('contract-types')->group(function () {
+        Route::get('/', [ContractTypeController::class, 'index']);
+        Route::post('/', [ContractTypeController::class, 'store']);
+        Route::get('/{id}', [ContractTypeController::class, 'show']);
+        Route::put('/{id}', [ContractTypeController::class, 'update']);
+        Route::delete('/{id}', [ContractTypeController::class, 'destroy']);
+        Route::patch('/{id}/restore', [ContractTypeController::class, 'restore']);
+    });
+
+    Route::prefix('contracts')->group(function () {
+        Route::get('/', [ContractController::class, 'index']); 
+        Route::post('/', [ContractController::class, 'store']);
+        Route::get('/{id}', [ContractController::class, 'show']); 
+        Route::patch('/{id}/renew', [ContractController::class, 'renew']);
+        Route::patch('/{id}/terminate', [ContractController::class, 'terminate']);
+    });
+
+    Route::prefix('schedules')->group(function () {
+        Route::get('/', [ScheduleController::class, 'index']);
+        Route::post('/', [ScheduleController::class, 'store']); 
+        Route::get('/{id}', [ScheduleController::class, 'show']); 
+        Route::put('/{id}', [ScheduleController::class, 'update']);
+        Route::delete('/{id}', [ScheduleController::class, 'destroy']);
+        Route::patch('/{id}/restore', [ScheduleController::class, 'restore']); 
+    });
+    
+
+    Route::prefix('employee-schedules')->group(function () {
+        Route::get('/', [EmployeeScheduleController::class, 'index']);
+        Route::get('/{employee_id}/active', [EmployeeScheduleController::class, 'activeSchedules']); 
+        Route::post('/{employee_id}', [EmployeeScheduleController::class, 'store']);
+        Route::patch('/{employee_id}/change', [EmployeeScheduleController::class, 'change']); 
+        Route::delete('/{id}', [EmployeeScheduleController::class, 'destroy']); 
+        Route::patch('/{id}/restore', [EmployeeScheduleController::class, 'restore']);
+    });
+    
+    
 
 
 });
