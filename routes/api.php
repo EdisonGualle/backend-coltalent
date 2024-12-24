@@ -19,6 +19,9 @@ use App\Http\Controllers\Employee\Education\TrainingController;
 use App\Http\Controllers\Employee\Education\TrainingTypeController;
 use App\Http\Controllers\Employee\EmployeeController;
 use App\Http\Controllers\Employee\Schedules\WorkScheduleController;
+use App\Http\Controllers\Holidays\HolidayAssignmentController;
+use App\Http\Controllers\Holidays\HolidayController;
+use App\Http\Controllers\Holidays\HolidayWorkRecordController;
 use App\Http\Controllers\Leave\LeaveCommentController;
 use App\Http\Controllers\Leave\LeaveController;
 use App\Http\Controllers\Leave\LeaveStateController;
@@ -35,6 +38,7 @@ use App\Http\Controllers\ReportExcel\LeaveExportController;
 use App\Http\Controllers\Reports\LeaveReportController;
 use App\Http\Controllers\Reports\ReportController;
 use App\Http\Controllers\Role\RoleController;
+use App\Http\Controllers\Schedules\DailyOverrideController;
 use App\Http\Controllers\Schedules\EmployeeScheduleController;
 use App\Http\Controllers\Schedules\ScheduleController;
 use App\Http\Controllers\User\UserController;
@@ -213,33 +217,72 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('contracts')->group(function () {
-        Route::get('/', [ContractController::class, 'index']); 
+        Route::get('/', [ContractController::class, 'index']);
         Route::post('/', [ContractController::class, 'store']);
-        Route::get('/{id}', [ContractController::class, 'show']); 
+        Route::get('/{id}', [ContractController::class, 'show']);
         Route::patch('/{id}/renew', [ContractController::class, 'renew']);
         Route::patch('/{id}/terminate', [ContractController::class, 'terminate']);
     });
 
     Route::prefix('schedules')->group(function () {
         Route::get('/', [ScheduleController::class, 'index']);
-        Route::post('/', [ScheduleController::class, 'store']); 
-        Route::get('/{id}', [ScheduleController::class, 'show']); 
+        Route::post('/', [ScheduleController::class, 'store']);
+        Route::get('/{id}', [ScheduleController::class, 'show']);
         Route::put('/{id}', [ScheduleController::class, 'update']);
         Route::delete('/{id}', [ScheduleController::class, 'destroy']);
-        Route::patch('/{id}/restore', [ScheduleController::class, 'restore']); 
+        Route::patch('/{id}/restore', [ScheduleController::class, 'restore']);
     });
-    
+
 
     Route::prefix('employee-schedules')->group(function () {
         Route::get('/', [EmployeeScheduleController::class, 'index']);
-        Route::get('/{employee_id}/active', [EmployeeScheduleController::class, 'activeSchedules']); 
+        Route::get('/{employee_id}/active', [EmployeeScheduleController::class, 'activeSchedules']);
         Route::post('/{employee_id}', [EmployeeScheduleController::class, 'store']);
-        Route::patch('/{employee_id}/change', [EmployeeScheduleController::class, 'change']); 
-        Route::delete('/{id}', [EmployeeScheduleController::class, 'destroy']); 
+        Route::patch('/{employee_id}/change', [EmployeeScheduleController::class, 'change']);
+        Route::delete('/{id}', [EmployeeScheduleController::class, 'destroy']);
         Route::patch('/{id}/restore', [EmployeeScheduleController::class, 'restore']);
     });
+
+    // Rutas para los ajustes temporales
+    Route::prefix('daily-overrides')->group(function () {
+        Route::get('/', [DailyOverrideController::class, 'index']);
+        Route::post('/', [DailyOverrideController::class, 'store']);
+        Route::put('/{id}', [DailyOverrideController::class, 'update']);
+        Route::delete('/{id}', [DailyOverrideController::class, 'destroy']);
+        Route::patch('/{id}/restore', [DailyOverrideController::class, 'restore']);
+        Route::get('/employee/{employee_id}', [DailyOverrideController::class, 'getByEmployee']);
+
+    });
+
+    // Rutas para los días festivos
+    Route::prefix('holidays')->group(function () {
+        Route::get('/assignable', [HolidayController::class, 'assignable']);
+        Route::get('/', [HolidayController::class, 'index']);
+        Route::post('/', [HolidayController::class, 'store']);
+        Route::get('/{id}', [HolidayController::class, 'show']);
+        Route::put('/{id}', [HolidayController::class, 'update']);
+        Route::delete('/{id}', [HolidayController::class, 'destroy']);
+        Route::patch('/{id}/restore', [HolidayController::class, 'restore']);
+    });
+
+    // Rutas para las asignaciones de días festivos a empleados
+    Route::prefix('holiday-assignments')->group(function () {
+        Route::post('/{holidayId}', [HolidayAssignmentController::class, 'store']); 
+        Route::get('/', [HolidayAssignmentController::class, 'index']); 
+        Route::get('/employee/{employeeId}', [HolidayAssignmentController::class, 'showByEmployee']); 
+        Route::delete('/', [HolidayAssignmentController::class, 'destroy']); 
+    });
+
+    // Rutas para los registros de trabajo en días festivos
+    Route::prefix('holiday-work-records')->group(function () {
+        Route::post('/', [HolidayWorkRecordController::class, 'store']); // Crear en rango
+        Route::get('/', [HolidayWorkRecordController::class, 'index']); // Obtener todos los registros activos
+        Route::get('/employee/{employeeId}', [HolidayWorkRecordController::class, 'showByEmployee']); // Obtener registros por empleado
+        Route::get('/{recordId}', [HolidayWorkRecordController::class, 'show']); // Obtener un registro específico
+        Route::delete('/', [HolidayWorkRecordController::class, 'destroy']); // Eliminar en rango
+    });
     
-    
+
 
 
 });

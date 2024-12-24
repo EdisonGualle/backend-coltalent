@@ -15,11 +15,15 @@ use Illuminate\Notifications\Notifiable;
 
 use App\Models\Employee\PersonalInfo\Address;
 use App\Models\Employee\PersonalInfo\Contact;
+use App\Models\Holidays\CompensatoryDay;
+use App\Models\Holidays\HolidayAssignment;
+use App\Models\Holidays\HolidayWorkRecord;
 use App\Models\Leave\Delegation;
 use App\Models\Leave\Leave;
 use App\Models\Leave\LeaveComment;
 use App\Models\Organization\Position;
 use App\Models\User;
+use App\Models\Work\OvertimeWork;
 
 class Employee extends Model
 {
@@ -64,18 +68,42 @@ class Employee extends Model
         return $Name !== '' ? $Name : null;
     }
 
-       // Relación uno a muchos
-       public function contracts()
-       {
-           return $this->hasMany(Contract::class, 'employee_id');
-       }
-   
-       // Obtener el contrato actual
-       public function currentContract()
-       {
-           return $this->hasOne(Contract::class, 'employee_id')->where('is_active', true);
-       }
-       
+    public function overtimeWorks()
+    {
+        return $this->hasMany(OvertimeWork::class, 'employee_id');
+    }
+
+
+    // Relación uno a muchos con HolidayAssignment
+    public function holidayAssignments()
+    {
+        return $this->hasMany(HolidayAssignment::class, 'employee_id');
+    }
+
+    // Relación uno a muchos con HolidayWorkRecord
+    public function holidayWorkRecords()
+    {
+        return $this->hasMany(HolidayWorkRecord::class, 'employee_id');
+    }
+
+    // Relación uno a muchos con CompensatoryDay
+    public function compensatoryDays()
+    {
+        return $this->hasMany(CompensatoryDay::class, 'employee_id');
+    }
+
+    // Relación uno a muchos
+    public function contracts()
+    {
+        return $this->hasMany(Contract::class, 'employee_id');
+    }
+
+    // Obtener el contrato actual
+    public function currentContract()
+    {
+        return $this->hasOne(Contract::class, 'employee_id')->where('is_active', true);
+    }
+
     // Relación con Leave como solicitante
     public function leaves()
     {
