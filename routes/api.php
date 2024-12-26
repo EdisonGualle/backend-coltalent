@@ -43,6 +43,7 @@ use App\Http\Controllers\Schedules\EmployeeScheduleController;
 use App\Http\Controllers\Schedules\ScheduleController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Controllers\User\UserStateController;
+use App\Http\Controllers\Work\OvertimeWorkController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -267,10 +268,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Rutas para las asignaciones de días festivos a empleados
     Route::prefix('holiday-assignments')->group(function () {
-        Route::post('/{holidayId}', [HolidayAssignmentController::class, 'store']); 
-        Route::get('/', [HolidayAssignmentController::class, 'index']); 
-        Route::get('/employee/{employeeId}', [HolidayAssignmentController::class, 'showByEmployee']); 
-        Route::delete('/', [HolidayAssignmentController::class, 'destroy']); 
+        Route::post('/{holidayId}', [HolidayAssignmentController::class, 'store']);
+        Route::get('/', [HolidayAssignmentController::class, 'index']);
+        Route::get('/employee/{employeeId}', [HolidayAssignmentController::class, 'showByEmployee']);
+        Route::delete('/', [HolidayAssignmentController::class, 'destroy']);
     });
 
     // Rutas para los registros de trabajo en días festivos
@@ -281,7 +282,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{recordId}', [HolidayWorkRecordController::class, 'show']); // Obtener un registro específico
         Route::delete('/', [HolidayWorkRecordController::class, 'destroy']); // Eliminar en rango
     });
-    
+
+
+    // Rutas para gestionar registros de trabajo en días festivos, descanso u horas extra
+    Route::prefix('overtime-work')->group(function () {
+        Route::post('/', [OvertimeWorkController::class, 'store']); // Crear un registro de trabajo
+        Route::get('/', [OvertimeWorkController::class, 'index']); // Obtener todos los registros activos
+        Route::get('/employee/{employeeId}', [OvertimeWorkController::class, 'showByEmployee']); // Obtener registros de un empleado
+        Route::get('/{recordId}', [OvertimeWorkController::class, 'show']); // Obtener un registro específico
+        Route::delete('/', [OvertimeWorkController::class, 'destroy']); // Eliminar registros en rango
+    });
+
+
 
 
 
