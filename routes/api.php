@@ -270,7 +270,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('holiday-assignments')->group(function () {
         Route::post('/{holidayId}', [HolidayAssignmentController::class, 'store']);
         Route::get('/', [HolidayAssignmentController::class, 'index']);
-        Route::get('/employee/{employeeId}', [HolidayAssignmentController::class, 'showByEmployee']);
+        Route::get('/employee/{employeeId
+        }', [HolidayAssignmentController::class, 'showByEmployee']);
         Route::delete('/', [HolidayAssignmentController::class, 'destroy']);
     });
 

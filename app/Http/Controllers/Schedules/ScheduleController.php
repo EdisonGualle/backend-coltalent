@@ -7,6 +7,7 @@ use App\Http\Requests\Schedules\CreateScheduleRequest;
 use App\Http\Requests\Schedules\UpdateScheduleRequest;
 use App\Services\Schedules\ScheduleService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class ScheduleController extends Controller
 {
@@ -46,6 +47,11 @@ class ScheduleController extends Controller
      */
     public function update(UpdateScheduleRequest $request, int $id): JsonResponse
     {
+        Log::info('Datos validados recibidos para actualizar el horario', [
+            'id' => $id,
+            'datos' => $request->validated(),
+        ]);
+        
         return $this->scheduleService->updateSchedule($id, $request->validated());
     }
 

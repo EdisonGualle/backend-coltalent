@@ -84,13 +84,16 @@ class ScheduleService extends ResponseService
         try {
             $schedule = Schedule::findOrFail($id);
             $schedule->delete();
-            return $this->successResponse('Horario eliminado con éxito.');
+
+            // Devolver el horario con formato, incluyendo el estado actualizado
+            return $this->successResponse('Horario eliminado con éxito.', $this->formatSchedule($schedule));
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Horario no encontrado.', 404);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al eliminar el horario: ' . $e->getMessage(), 500);
         }
     }
+
 
     /**
      * Restaurar un horario eliminado lógicamente.
@@ -122,13 +125,20 @@ class ScheduleService extends ResponseService
         return [
             'id' => $schedule->id,
             'name' => $schedule->name,
-            'description' => $schedule->description,
-            'start_time' => $schedule->start_time,
-            'end_time' => $schedule->end_time,
-            'break_start_time' => $schedule->break_start_time,
-            'break_end_time' => $schedule->break_end_time,
+            'start_time' => $this->formatTime($schedule->start_time),
+            'end_time' => $this->formatTime($schedule->end_time),
+            'break_start_time' => $this->formatTime($schedule->break_start_time),
+            'break_end_time' => $this->formatTime($schedule->break_end_time),
             'rest_days' => $schedule->rest_days,
             'status' => $schedule->deleted_at ? 'Inactivo' : 'Activo',
         ];
+    }
+
+    /**
+     * Formatear tiempo (cortar a hh:mm o devolver null si es nulo).
+     */
+    private function formatTime(?string $time): ?string
+    {
+        return $time ? substr($time, 0, 5) : null;
     }
 }

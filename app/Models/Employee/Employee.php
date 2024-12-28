@@ -21,7 +21,9 @@ use App\Models\Holidays\HolidayWorkRecord;
 use App\Models\Leave\Delegation;
 use App\Models\Leave\Leave;
 use App\Models\Leave\LeaveComment;
+use App\Models\Organization\Direction;
 use App\Models\Organization\Position;
+use App\Models\Organization\Unit;
 use App\Models\User;
 use App\Models\Work\OvertimeWork;
 
@@ -187,6 +189,46 @@ class Employee extends Model
     {
         return $this->hasMany(Language::class);
     }
+
+    // Relación con Unit a través de Position
+    public function unit()
+    {
+        return $this->hasOneThrough(
+            Unit::class,
+            Position::class,
+            'id',
+            'id',
+            'position_id',
+            'unit_id'
+        );
+    }
+
+    // Relación con Direction directamente desde Position
+    public function directDirection()
+    {
+        return $this->hasOneThrough(
+            Direction::class,
+            Position::class,
+            'id',              
+            'id',             
+            'position_id',    
+            'direction_id'     
+        );
+    }
+
+    // Relación con Direction a través de Unit
+    public function viaUnitDirection()
+    {
+        return $this->unit?->direction;
+    }
+
+    // Método para obtener la dirección final
+    public function getFinalDirectionAttribute()
+    {
+        return $this->directDirection()->first() ?? $this->viaUnitDirection();
+    }
+
+
 
     //Busquedas
     public function scopeFilter($query, array $filters)

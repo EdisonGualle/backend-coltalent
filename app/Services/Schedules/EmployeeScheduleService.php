@@ -18,24 +18,25 @@ class EmployeeScheduleService extends ResponseService
     public function getAllEmployeeSchedules(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $query = EmployeeSchedule::with(['employee', 'schedule']);
-
+            $query = EmployeeSchedule::with(['employee.position.unit.direction', 'schedule']);
+    
             if ($includeDeleted) {
                 $query->withTrashed();
             }
-
+    
             $assignments = $query->get();
-
+    
             $formattedAssignments = $assignments->map(
                 fn(EmployeeSchedule $assignment) =>
                 $this->formatEmployeeSchedule($assignment)
             );
-
+    
             return $this->successResponse('Lista de asignaciones obtenida con éxito.', $formattedAssignments);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de asignaciones: ' . $e->getMessage(), 500);
         }
     }
+    
 
 
     /**
@@ -46,15 +47,16 @@ class EmployeeScheduleService extends ResponseService
         try {
             $activeSchedules = EmployeeSchedule::where('employee_id', $employeeId)
                 ->where('is_active', true)
-                ->with('schedule')
+                ->with(['employee.position.unit.direction', 'schedule'])
                 ->get()
                 ->map(fn($assignment) => $this->formatEmployeeSchedule($assignment));
-
+    
             return $this->successResponse('Horarios activos obtenidos con éxito.', $activeSchedules);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener los horarios activos: ' . $e->getMessage(), 500);
         }
     }
+    
 
     /**
      * Asignar un nuevo horario a un empleado.
@@ -256,13 +258,28 @@ class EmployeeScheduleService extends ResponseService
      */
     private function formatEmployeeSchedule(EmployeeSchedule $assignment): array
     {
+        $employee = $assignment->employee;
+    
         return [
             'id' => $assignment->id,
-            'employee' => $assignment->employee?->only(['id', 'first_name', 'last_name']),
-            'schedule' => $assignment->schedule?->only(['id', 'name', 'start_time', 'end_time', 'break_start_time', 'break_end_time', 'rest_days']),
-            'start_date' => $assignment->start_date,
-            'end_date' => $assignment->end_date ?? 'Sin finalizar',
-            'is_active' => $assignment->is_active ? 'Activo' : 'Inactivo',
+            'start_date' => $assignment->start_date ?? null,
+            'end_date' => $assignment->end_date ?? null,
+            'status' => $assignment->is_active ? 'Activo' : 'Inactivo',
+            'employee' => [
+                'id' => $employee->id,
+                'identification' => $employee->identification,
+                'full_name' => $employee->full_name,
+                'organization' => [
+                    'position' => $employee->position->name ?? 'No especificado',
+                    'unit' => $employee->unit->name ?? 'No especificado',
+                    'direction' => $employee->finalDirection?->name ?? 'No especificado',
+                ],
+            ],
+            'schedule' => [
+                'id' => $assignment->schedule?->id,
+                'name' => $assignment->schedule?->name,
+            ],
         ];
     }
+    
 }
