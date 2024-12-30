@@ -4,8 +4,12 @@ namespace App\Services\Schedules;
 
 use App\Models\Schedules\Schedule;
 use App\Services\ResponseService;
+use App\Utilities\TimeFormatter;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+
 
 class ScheduleService extends ResponseService
 {
@@ -122,6 +126,8 @@ class ScheduleService extends ResponseService
      */
     private function formatSchedule(Schedule $schedule): array
     {
+        $weeklyMinutes = $this->calculateWeeklyMinutes($schedule);
+
         return [
             'id' => $schedule->id,
             'name' => $schedule->name,
@@ -131,7 +137,66 @@ class ScheduleService extends ResponseService
             'break_end_time' => $this->formatTime($schedule->break_end_time),
             'rest_days' => $schedule->rest_days,
             'status' => $schedule->deleted_at ? 'Inactivo' : 'Activo',
+            'weekly_hours' => TimeFormatter::formatMinutesToReadable($weeklyMinutes),
         ];
+    }
+
+    /**
+     * Calcular los minutos semanales efectivos de un horario.
+     */
+    private function calculateWeeklyMinutes(Schedule $schedule): int
+    {
+        try {
+            // Formatear las horas utilizando formatTime
+            $startTime = $this->formatTime($schedule->start_time);
+            $endTime = $this->formatTime($schedule->end_time);
+
+            // Validar horas de inicio y fin
+            if (!$startTime || !$endTime) {
+                return 0; // Si no hay horas de inicio o fin, los minutos semanales son 0
+            }
+
+            // Crear instancias de Carbon
+            $startTime = Carbon::createFromFormat('H:i', $startTime);
+            $endTime = Carbon::createFromFormat('H:i', $endTime);
+
+            // Manejar horarios cruzados al siguiente día
+            if ($endTime->lt($startTime)) {
+                $endTime->addDay();
+            }
+
+            // Calcular minutos diarios entre inicio y fin
+            $dailyMinutes = $endTime->diffInMinutes($startTime);
+
+            // Manejar descanso (opcional)
+            $breakStartTime = $this->formatTime($schedule->break_start_time);
+            $breakEndTime = $this->formatTime($schedule->break_end_time);
+            $breakDuration = 0;
+
+            if ($breakStartTime && $breakEndTime) {
+                $breakStartTime = Carbon::createFromFormat('H:i', $breakStartTime);
+                $breakEndTime = Carbon::createFromFormat('H:i', $breakEndTime);
+
+                // Manejar descanso cruzado al siguiente día
+                if ($breakEndTime->lt($breakStartTime)) {
+                    $breakEndTime->addDay();
+                }
+
+                $breakDuration = $breakEndTime->diffInMinutes($breakStartTime);
+            }
+
+            // Cálculo efectivo diario
+            $effectiveDailyMinutes = max($dailyMinutes - $breakDuration, 0);
+
+            // Días laborales en la semana (7 días - días de descanso)
+            $workDays = 7 - count($schedule->rest_days ?? []);
+
+            // Cálculo total semanal
+            return $effectiveDailyMinutes * $workDays;
+        } catch (\Exception $e) {
+            // Registrar errores y devolver 0 minutos en caso de fallo
+            return 0;
+        }
     }
 
     /**

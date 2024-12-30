@@ -8,6 +8,7 @@ use App\Services\Employee\EmployeeService;
 use Exception;
 use App\Http\Requests\Employee\StoreEmployeeRequest;
 use App\Http\Requests\Employee\UpdateEmployeeRequest;
+use Illuminate\Support\Facades\Log;
 
 class EmployeeController extends Controller
 {
@@ -28,6 +29,21 @@ class EmployeeController extends Controller
             return $this->respondWithError('Error al obtener los empleados: ' . $e->getMessage(), 500);
         }
     }
+    /**
+     * Listar empleados con contratos activos.
+     */
+    public function activeEmployees()
+    {
+        try {
+            $employees = $this->employeeService->getActiveEmployeesWithContracts();    
+            return $this->respondWithSuccess('Empleados con contratos activos obtenidos exitosamente.', $employees);
+        } catch (Exception $e) {
+            return $this->respondWithError('Error al obtener empleados con contratos activos: ' . $e->getMessage(), 500);
+        }
+    }
+    
+
+
 
     public function show($id)
     {
@@ -47,8 +63,8 @@ class EmployeeController extends Controller
             return $this->respondWithError('Error al crear el empleado: ' . $e->getMessage(), 500);
         }
     }
-    
-    
+
+
 
     public function update(UpdateEmployeeRequest $request, $id)
     {
@@ -59,14 +75,14 @@ class EmployeeController extends Controller
             return $this->respondWithError('Error al actualizar el empleado: ' . $e->getMessage(), 500);
         }
     }
-    
+
     public function destroy($id)
     {
         try {
             $this->employeeService->deleteEmployee($id);
             return $this->respondWithSuccess('Empleado eliminado exitosamente.', []);
         } catch (Exception $e) {
-            return $this->respondWithError( $e->getMessage(), 500);
+            return $this->respondWithError($e->getMessage(), 500);
         }
     }
 

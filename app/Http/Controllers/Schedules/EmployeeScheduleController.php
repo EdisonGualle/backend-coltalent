@@ -22,7 +22,7 @@ class EmployeeScheduleController extends Controller
      */
     public function index(): JsonResponse
     {
-        return $this->service->getAllEmployeeSchedules(true);
+        return $this->service->getAllEmployeeSchedules(false); 
     }
 
     /**

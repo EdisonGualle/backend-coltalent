@@ -18,25 +18,31 @@ class EmployeeScheduleService extends ResponseService
     public function getAllEmployeeSchedules(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $query = EmployeeSchedule::with(['employee.position.unit.direction', 'schedule']);
-    
+            $query = EmployeeSchedule::with([
+                'employee.position.unit.direction',
+                'schedule' => function ($query) {
+                    $query->withTrashed();
+                },
+            ]);
+
             if ($includeDeleted) {
-                $query->withTrashed();
+                $query->withTrashed(); // Incluye asignaciones eliminadas lógicamente
             }
-    
-            $assignments = $query->get();
-    
+
+            // Ordenar primero por el estado (activos primero) y luego por ID (más alto primero)
+            $assignments = $query->orderBy('is_active', 'desc')
+                ->orderBy('id', 'desc')
+                ->get();
+
             $formattedAssignments = $assignments->map(
-                fn(EmployeeSchedule $assignment) =>
-                $this->formatEmployeeSchedule($assignment)
+                fn(EmployeeSchedule $assignment) => $this->formatEmployeeSchedule($assignment)
             );
-    
+
             return $this->successResponse('Lista de asignaciones obtenida con éxito.', $formattedAssignments);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de asignaciones: ' . $e->getMessage(), 500);
         }
     }
-    
 
 
     /**
@@ -50,13 +56,13 @@ class EmployeeScheduleService extends ResponseService
                 ->with(['employee.position.unit.direction', 'schedule'])
                 ->get()
                 ->map(fn($assignment) => $this->formatEmployeeSchedule($assignment));
-    
+
             return $this->successResponse('Horarios activos obtenidos con éxito.', $activeSchedules);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener los horarios activos: ' . $e->getMessage(), 500);
         }
     }
-    
+
 
     /**
      * Asignar un nuevo horario a un empleado.
@@ -68,95 +74,89 @@ class EmployeeScheduleService extends ResponseService
             $contract = Contract::where('employee_id', $employeeId)
                 ->where('is_active', true)
                 ->firstOrFail();
-    
+
             $contractStartDate = $contract->start_date;
             $contractEndDate = $contract->end_date; // Puede ser null para contratos indefinidos
             $today = now()->toDateString();
-    
-            // Verificar si existen asignaciones previas
-            $hasPreviousAssignments = EmployeeSchedule::where('employee_id', $employeeId)->exists();
-    
-            // Configurar fechas predeterminadas
-            if (!$hasPreviousAssignments) {
-                // Primera asignación
-                $data['start_date'] = $data['start_date'] ?? $contractStartDate;
-                $data['end_date'] = $data['end_date'] ?? null;
-            } else {
-                // Asignaciones posteriores
-                $data['start_date'] = $data['start_date'] ?? $today;
-                $data['end_date'] = $data['end_date'] ?? null;
-            }
-    
-            // Validaciones de fechas utilizando Validator
-            $validator = Validator::make($data, [
-                'start_date' => [
-                    'required',
-                    'date',
-                    'after_or_equal:' . $contractStartDate,
-                    $contractEndDate ? 'before_or_equal:' . $contractEndDate : '',
-                ],
-                'end_date' => [
-                    'nullable',
-                    'date',
-                    'after:start_date',
-                    $contractEndDate ? 'before_or_equal:' . $contractEndDate : '',
-                ],
-            ], [
-                'start_date.required' => 'La fecha de inicio es obligatoria.',
-                'start_date.after_or_equal' => 'La fecha de inicio no puede ser anterior a la fecha de inicio del contrato.',
-                'start_date.before_or_equal' => 'La fecha de inicio no puede ser posterior a la fecha de fin del contrato.',
-                'end_date.after' => 'La fecha de fin debe ser posterior a la fecha de inicio.',
-                'end_date.before_or_equal' => 'La fecha de fin no puede ser posterior a la fecha de fin del contrato.',
-            ]);
-    
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => false,
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-    
-            // Validar solapamiento de horarios anteriores
-            $overlappingSchedule = EmployeeSchedule::where('employee_id', $employeeId)
-                ->where(function ($query) use ($data) {
-                    $query->whereBetween('start_date', [$data['start_date'], $data['end_date'] ?? now()])
-                        ->orWhereBetween('end_date', [$data['start_date'], $data['end_date'] ?? now()])
-                        ->orWhere(function ($query) use ($data) {
-                            $query->where('start_date', '<=', $data['start_date'])
-                                ->where('end_date', '>=', $data['end_date'] ?? now());
-                        });
-                })
-                ->exists();
-    
-            if ($overlappingSchedule) {
+
+            // Configurar fechas automáticas para el nuevo horario
+            $data['start_date'] = $data['start_date'] ?? ($today >= $contractStartDate ? $today : $contractStartDate);
+            $data['end_date'] = $data['end_date'] ?? $contractEndDate;
+
+            // Validar que las fechas sean futuras
+            if ($data['start_date'] < $today) {
                 return response()->json([
                     'status' => false,
                     'errors' => [
-                        'start_date' => ['El nuevo horario se solapa con un horario ya existente.'],
-                        'end_date' => ['El nuevo horario se solapa con un horario ya existente.'],
+                        'start_date' => ['La fecha de inicio debe ser futura o igual al día actual.']
                     ],
                 ], 422);
             }
-    
-            // Finalizar asignación activa actual
-            $currentAssignment = EmployeeSchedule::where('employee_id', $employeeId)
+
+            // Validar que end_date sea mayor a start_date
+            if ($data['end_date'] && $data['end_date'] < $data['start_date']) {
+                return response()->json([
+                    'status' => false,
+                    'errors' => [
+                        'end_date' => ['La fecha de fin debe ser posterior a la fecha de inicio.']
+                    ],
+                ], 422);
+            }
+
+            // Validar que si se proporciona end_date, start_date sea obligatorio
+            if (isset($data['end_date']) && empty($data['start_date'])) {
+                return response()->json([
+                    'status' => false,
+                    'errors' => [
+                        'start_date' => ['Debe proporcionar la fecha de inicio si establece una fecha de fin.']
+                    ],
+                ], 422);
+            }
+
+            // Obtener el horario activo actual
+            $currentSchedule = EmployeeSchedule::where('employee_id', $employeeId)
                 ->where('is_active', true)
                 ->first();
-    
-            if ($currentAssignment) {
-                if ($currentAssignment->end_date && $currentAssignment->end_date > $data['start_date']) {
-                    $currentAssignment->update([
-                        'end_date' => $data['start_date'],
-                        'is_active' => false,
-                    ]);
-                } else {
-                    $currentAssignment->update([
-                        'end_date' => $today,
-                        'is_active' => false,
+
+            $updatedCurrentSchedule = null;
+
+            if ($currentSchedule) {
+                // Validar si el nuevo horario tiene el mismo schedule_id que el activo
+                if ($currentSchedule->schedule_id === $data['schedule_id']) {
+                    return response()->json([
+                        'status' => false,
+                        'errors' => [
+                            'schedule_id' => ['El horario ya está asignado. No se requiere ningún cambio.']
+                        ],
+                    ], 422);
+                }
+
+                // Actualizar el horario activo para poner is_active en false
+                $currentSchedule->update(['is_active' => false]);
+
+                // Caso 1: Nuevo horario comienza antes del inicio del horario actual
+                if ($data['start_date'] < $currentSchedule->start_date) {
+                    $currentSchedule->update([
+                        'start_date' => $data['start_date'],
+                        'end_date' => $data['start_date']
                     ]);
                 }
+                // Caso 2: Nuevo horario comienza antes de que termine el actual
+                elseif ($currentSchedule->end_date && $data['start_date'] < $currentSchedule->end_date) {
+                    $currentSchedule->update([
+                        'end_date' => $data['start_date']
+                    ]);
+                }
+                // Caso 3: Horario actual tiene end_date = null
+                elseif ($currentSchedule->end_date === null) {
+                    $currentSchedule->update([
+                        'end_date' => $data['start_date']
+                    ]);
+                }
+
+                $updatedCurrentSchedule = $this->formatEmployeeSchedule($currentSchedule);
             }
-    
+
             // Crear nueva asignación
             $assignment = EmployeeSchedule::create([
                 'employee_id' => $employeeId,
@@ -165,15 +165,26 @@ class EmployeeScheduleService extends ResponseService
                 'end_date' => $data['end_date'],
                 'is_active' => true,
             ]);
-    
-            return $this->successResponse('Horario asignado con éxito.', $this->formatEmployeeSchedule($assignment), 201);
+
+            // Recargar para incluir la relación 'schedule'
+            $assignment->load('schedule');
+
+            $formattedNewAssignment = $this->formatEmployeeSchedule($assignment);
+
+            // Respuesta con ambos horarios
+            return $this->successResponse('Horario asignado con éxito.', [
+                'updated_current_schedule' => $updatedCurrentSchedule,
+                'new_schedule' => $formattedNewAssignment,
+            ], 201);
+
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Empleado o contrato no encontrado.', 404);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al asignar el horario: ' . $e->getMessage(), 500);
         }
     }
-    
+
+
 
     /**
      * Cambiar el horario activo de un empleado.
@@ -205,17 +216,17 @@ class EmployeeScheduleService extends ResponseService
             $assignment = EmployeeSchedule::findOrFail($id);
 
             // Validar si el contrato aún está activo
-            $contract = Contract::where('employee_id', $assignment->employee_id)
-                ->where('is_active', true)
-                ->first();
+            // $contract = Contract::where('employee_id', $assignment->employee_id)
+            //     ->where('is_active', true)
+            //     ->first();
 
-            if ($contract) {
-                return $this->errorResponse('No se puede eliminar el horario porque el contrato del empleado aún está activo.', 400);
-            }
+            // if ($contract) {
+            //     return $this->errorResponse('No se puede eliminar el horario porque el contrato del empleado aún está activo.', 400);
+            // }
 
             $assignment->delete();
 
-            return $this->successResponse('Asignación eliminada con éxito.');
+            return $this->successResponse('Asignación eliminada con éxito.', ['id' => $id]);
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Asignación no encontrada.', 404);
         } catch (\Exception $e) {
@@ -259,7 +270,7 @@ class EmployeeScheduleService extends ResponseService
     private function formatEmployeeSchedule(EmployeeSchedule $assignment): array
     {
         $employee = $assignment->employee;
-    
+
         return [
             'id' => $assignment->id,
             'start_date' => $assignment->start_date ?? null,
@@ -281,5 +292,5 @@ class EmployeeScheduleService extends ResponseService
             ],
         ];
     }
-    
+
 }

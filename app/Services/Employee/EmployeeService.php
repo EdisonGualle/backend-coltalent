@@ -21,13 +21,13 @@ class EmployeeService
 {
     public function getAllEmployees()
     {
-            $employees = Employee::with([
-                'contact',
-                'address',
-                'position' => function ($query) {
-                    $query->withTrashed();
-                }
-            ])
+        $employees = Employee::with([
+            'contact',
+            'address',
+            'position' => function ($query) {
+                $query->withTrashed();
+            }
+        ])
             ->get()
             ->map(function ($employee) {
                 $employee->full_name = $employee->getFullNameAttribute();
@@ -40,6 +40,45 @@ class EmployeeService
 
         return $employees;
     }
+
+    public function getActiveEmployeesWithContracts(): array
+    {
+        try {
+            $employees = Employee::with([
+                'contracts' => function ($query) {
+                    $query->where('is_active', true)->with('contractType');
+                }
+            ])
+            ->whereHas('contracts', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->get();
+    
+            return $employees->map(function ($employee) {
+                $activeContract = $employee->contracts->first();
+                return [
+                    'id' => $employee->id,
+                    'full_name' => $employee->getFullNameAttribute(),
+                    'identification' => $employee->identification ?? null,
+                    'contract' => $activeContract ? [
+                        'id' => $activeContract->id,
+                        'start_date' => $activeContract->start_date,
+                        'end_date' => $activeContract->end_date,
+                        'is_active' => $activeContract->is_active,
+                        'contract_type' => $activeContract->contractType ? [
+                            'id' => $activeContract->contractType->id,
+                            'name' => $activeContract->contractType->name,
+                            'weekly_hours' => $activeContract->contractType->weekly_hours,
+                        ] : null,
+                    ] : null,
+                ];
+            })->toArray();
+        } catch (Exception $e) {
+            throw new Exception('Error al obtener empleados con contratos activos.');
+        }
+    }
+    
+
 
     public function getEmployeeById($id)
     {
@@ -276,7 +315,5 @@ class EmployeeService
             }
         });
     }
-
-
 
 }

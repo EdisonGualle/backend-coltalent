@@ -47,67 +47,63 @@ class CreateEmployeeScheduleRequest extends FormRequest
     }
 
 
-public function withValidator($validator)
-{
-    $validator->after(function ($validator) {
-        $employeeId = $this->route('employee_id');
-        $scheduleId = $this->input('schedule_id');
-        $startDate = $this->input('start_date');
-        $endDate = $this->input('end_date');
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $employeeId = $this->route('employee_id');
+            $scheduleId = $this->input('schedule_id');
+            $startDate = $this->input('start_date');
+            $endDate = $this->input('end_date');
 
-        // Validar que el empleado existe
-        $employee = Employee::find($employeeId);
-        if (!$employee) {
-            $validator->errors()->add('employee_id', 'El empleado seleccionado no existe.');
-            return;
-        }
-
-        // Validar que el empleado tiene un contrato activo
-        $activeContract = $employee->contracts()->where('is_active', true)->first();
-        if (!$activeContract) {
-            $validator->errors()->add('employee_id', 'El empleado no tiene un contrato activo.');
-            return;
-        }
-
-          // Si una fecha es proporcionada, la otra debe ser obligatoria
-          if ($startDate && !$endDate) {
-            $validator->errors()->add('end_date', 'Debe proporcionar una fecha de fin si proporciona una fecha de inicio.');
-        }
-
-        if ($endDate && !$startDate) {
-            $validator->errors()->add('start_date', 'Debe proporcionar una fecha de inicio si proporciona una fecha de fin.');
-        }
-
-         // Validar relación entre fechas solo si ambas están presentes
-         if ($startDate && $endDate) {
-            if (Carbon::parse($startDate)->gte(Carbon::parse($endDate))) {
-                $validator->errors()->add('start_date', 'La fecha de inicio debe ser anterior a la fecha de fin.');
+            // Validar que el empleado existe
+            $employee = Employee::find($employeeId);
+            if (!$employee) {
+                $validator->errors()->add('employee_id', 'El empleado seleccionado no existe.');
+                return;
             }
-        }
 
-        // Obtener el tipo de contrato y sus horas semanales
-        $contractType = $activeContract->contractType;
-        if (!$contractType || !$contractType->weekly_hours) {
-            $validator->errors()->add(
-                'employee_id',
-                'El tipo de contrato del empleado no tiene configuradas las horas semanales requeridas.'
-            );
-            return;
-        }
+            // Validar que el empleado tiene un contrato activo
+            $activeContract = $employee->contracts()->where('is_active', true)->first();
+            if (!$activeContract) {
+                $validator->errors()->add('employee_id', 'El empleado no tiene un contrato activo.');
+                return;
+            }
 
-        // Validar que el horario cumple con las horas semanales requeridas
-        $schedule = Schedule::find($scheduleId);
-        if ($schedule) {
-            $scheduleWeeklyHours = $this->calculateWeeklyHours($schedule);
-            if ($scheduleWeeklyHours !== (int) $contractType->weekly_hours) {
+
+            if ($endDate && !$startDate) {
+                $validator->errors()->add('start_date', 'Debe proporcionar una fecha de inicio si proporciona una fecha de fin.');
+            }
+
+            // Validar relación entre fechas solo si ambas están presentes
+            if ($startDate && $endDate) {
+                if (Carbon::parse($startDate)->gte(Carbon::parse($endDate))) {
+                    $validator->errors()->add('start_date', 'La fecha de inicio debe ser anterior a la fecha de fin.');
+                }
+            }
+
+            // Obtener el tipo de contrato y sus horas semanales
+            $contractType = $activeContract->contractType;
+            if (!$contractType || !$contractType->weekly_hours) {
                 $validator->errors()->add(
-                    'schedule_id',
-                    "El horario seleccionado no cumple con las {$contractType->weekly_hours} horas semanales requeridas por el contrato."
+                    'employee_id',
+                    'El tipo de contrato del empleado no tiene configuradas las horas semanales requeridas.'
                 );
+                return;
             }
-        }
-    });
-}
+
+            // Validar que el horario cumple con las horas semanales requeridas
+            $schedule = Schedule::find($scheduleId);
+            if ($schedule) {
+                $scheduleWeeklyHours = $this->calculateWeeklyHours($schedule);
+                if ($scheduleWeeklyHours !== (int) $contractType->weekly_hours) {
+                    $validator->errors()->add(
+                        'schedule_id',
+                        "El horario seleccionado no cumple con las {$contractType->weekly_hours} horas semanales requeridas por el contrato."
+                    );
+                }
+            }
+        });
+    }
 
 
     /**
@@ -135,14 +131,8 @@ public function withValidator($validator)
 
         $effectiveDailyHours = $dailyHours - $breakDuration;
 
-        LOG::info('effectiveDailyHours: ' . $effectiveDailyHours);
-
         // Días laborales en la semana (7 días - días de descanso)
         $workDays = 7 - count($schedule->rest_days ?? []);
-
-        log::info('workDays: ' . $workDays);
-
-        LOG::info('effectiveDailyHours * workDays: ' . $effectiveDailyHours * $workDays);
 
         return $effectiveDailyHours * $workDays;
     }

@@ -232,6 +232,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [ScheduleController::class, 'update']);
         Route::delete('/{id}', [ScheduleController::class, 'destroy']);
         Route::patch('/{id}/restore', [ScheduleController::class, 'restore']);
+        
     });
 
 
@@ -240,7 +241,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{employee_id}/active', [EmployeeScheduleController::class, 'activeSchedules']);
         Route::post('/{employee_id}', [EmployeeScheduleController::class, 'store']);
         Route::patch('/{employee_id}/change', [EmployeeScheduleController::class, 'change']);
-        Route::delete('/{id}', [EmployeeScheduleController::class, 'destroy']);
+        Route::delete('/{id}/delete', [EmployeeScheduleController::class, 'destroy']);
         Route::patch('/{id}/restore', [EmployeeScheduleController::class, 'restore']);
     });
 
@@ -296,6 +297,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-
+    Route::get('employees/contracts/active', [EmployeeController::class, 'activeEmployees']);
 
 });
