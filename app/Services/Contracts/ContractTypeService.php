@@ -16,10 +16,13 @@ class ContractTypeService extends ResponseService
     {
         try {
             // Incluye todos los tipos de contrato, activos y eliminados lógicamente
-            $contractTypes = ContractType::withTrashed()->get()->map(function ($contractType) {
+            $contractTypes = ContractType::withTrashed()
+            ->orderBy('id', 'desc')
+            ->get()
+            ->map(function ($contractType) {
                 return $this->formatContractType($contractType);
             });
-    
+
             return $this->successResponse('Lista de tipos de contrato obtenida con éxito', $contractTypes);
         } catch (\Exception $e) {
             return $this->errorResponse('Error al obtener la lista de tipos de contrato: ' . $e->getMessage(), 500);
@@ -83,7 +86,7 @@ class ContractTypeService extends ResponseService
             $contractType = ContractType::findOrFail($id);
             $contractType->delete();
 
-            return $this->successResponse('Tipo de contrato eliminado con éxito');
+            return $this->successResponse('Tipo de contrato eliminado con éxito',$this->formatContractType($contractType) );
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Tipo de contrato no encontrado', 404);
         } catch (\Exception $e) {

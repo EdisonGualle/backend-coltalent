@@ -208,6 +208,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
+    // Rutas para los tipos de contrato
     Route::prefix('contract-types')->group(function () {
         Route::get('/', [ContractTypeController::class, 'index']);
         Route::post('/', [ContractTypeController::class, 'store']);
@@ -217,6 +218,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{id}/restore', [ContractTypeController::class, 'restore']);
     });
 
+    // Rutas para los contratos de empleados
     Route::prefix('contracts')->group(function () {
         Route::get('/', [ContractController::class, 'index']);
         Route::post('/', [ContractController::class, 'store']);
@@ -225,6 +227,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{id}/terminate', [ContractController::class, 'terminate']);
     });
 
+    // Rutas para los horarios de trabajo
     Route::prefix('schedules')->group(function () {
         Route::get('/', [ScheduleController::class, 'index']);
         Route::post('/', [ScheduleController::class, 'store']);
@@ -235,7 +238,7 @@ Route::middleware('auth:sanctum')->group(function () {
         
     });
 
-
+    // Rutas para las asignaciones de horarios a empleados
     Route::prefix('employee-schedules')->group(function () {
         Route::get('/', [EmployeeScheduleController::class, 'index']);
         Route::get('/{employee_id}/active', [EmployeeScheduleController::class, 'activeSchedules']);

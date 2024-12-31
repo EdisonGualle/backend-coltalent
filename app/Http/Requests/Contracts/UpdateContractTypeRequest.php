@@ -61,8 +61,8 @@ class UpdateContractTypeRequest extends FormRequest
             'renewable.false' => 'Un contrato indefinido no puede ser renovable.',
             'weekly_hours.required' => 'Las horas semanales son obligatorias.',
             'weekly_hours.integer' => 'Las horas semanales deben ser un número entero.',
-            'weekly_hours.min' => "Las horas semanales no pueden ser menores a $weeklyHoursMin.",
-            'weekly_hours.max' => "Las horas semanales no pueden exceder $weeklyHoursMax.",
+            'weekly_hours.min' => "Las horas semanales no pueden ser menores a $weeklyHoursMin h.",
+            'weekly_hours.max' => "Las horas semanales no pueden exceder $weeklyHoursMax h.",
         ];
     }
 
