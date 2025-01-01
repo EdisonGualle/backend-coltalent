@@ -16,13 +16,19 @@ class ContractService extends ResponseService
     public function getAllContracts(bool $includeDeleted = false): JsonResponse
     {
         try {
-            $query = Contract::with(['employee', 'contractType']);
+            $query = Contract::with([
+                'employee.position.unit.direction',
+                'contractType'
+            ]);
 
             if ($includeDeleted) {
                 $query->withTrashed();
             }
 
-            $contracts = $query->get()->map(fn(Contract $contract) => $this->formatContract($contract));
+            $contracts = $query->orderBy('is_active', 'desc')
+                ->orderBy('id', 'desc')
+                ->get()
+                ->map(fn(Contract $contract) => $this->formatContract($contract));
 
             return $this->successResponse('Lista de contratos obtenida con éxito', $contracts);
         } catch (\Exception $e) {
@@ -64,7 +70,10 @@ class ContractService extends ResponseService
     public function getContractById(string $id, bool $includeDeleted = false): JsonResponse
     {
         try {
-            $query = Contract::with(['employee', 'contractType']);
+            $query = Contract::with([
+                'employee.position.unit.direction',
+                'contractType'
+            ]);
 
             if ($includeDeleted) {
                 $query->withTrashed();
@@ -85,14 +94,23 @@ class ContractService extends ResponseService
         try {
             DB::beginTransaction();
 
-            $currentContract = Contract::findOrFail($id);
+            // Buscar el contrato con su tipo
+            $currentContract = Contract::with('contractType')->findOrFail($id);
 
-            // Obtener el límite de días para renovación desde la configuración
+            // Validación 1: Verificar si el tipo de contrato permite renovaciones
+            if (!$currentContract->contractType || !$currentContract->contractType->renewable) {
+                return $this->errorResponse('Este tipo de contrato no permite renovaciones.', 400);
+            }
+
+            // Validación 2: Verificar si el contrato tiene una fecha de finalización
+            if (is_null($currentContract->end_date)) {
+                return $this->errorResponse('No se puede renovar un contrato que no tiene fecha de finalización.', 400);
+            }
+
+            // Validación 3: Verificar el rango de días permitido para la renovación
             $renewalDaysLimit = DB::table('configurations')
                 ->where('key', 'contract_renewal_days_limit')
                 ->value('value');
-
-            // Validar que el contrato esté próximo a expirar
             $daysUntilEnd = now()->diffInDays(Carbon::parse($currentContract->end_date), false);
 
             if ($daysUntilEnd > $renewalDaysLimit) {
@@ -102,17 +120,14 @@ class ContractService extends ResponseService
                 );
             }
 
-            // Calcular las fechas para el nuevo contrato
+            // Calcular fechas para el nuevo contrato
             $startDate = Carbon::parse($currentContract->end_date)->addDay();
             $endDate = $currentContract->contractType->max_duration_months
                 ? $startDate->copy()->addMonths($currentContract->contractType->max_duration_months)
                 : null;
 
-            // Marcar el contrato actual como inactivo
-            $currentContract->update(['is_active' => false]);
-
             // Crear el nuevo contrato renovado
-            $renewedContract = $currentContract->employee->contracts()->create([
+            $newContract = $currentContract->employee->contracts()->create([
                 'contract_type_id' => $currentContract->contract_type_id,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
@@ -121,10 +136,14 @@ class ContractService extends ResponseService
 
             DB::commit();
 
-            return $this->successResponse('Contrato renovado con éxito', $this->formatContract($renewedContract));
+            // Respuesta con ambos contratos
+            return $this->successResponse('Contrato renovado con éxito.', [
+                'current_contract' => $this->formatContract($currentContract),
+                'new_contract' => $this->formatContract($newContract),
+            ]);
         } catch (ModelNotFoundException $e) {
             DB::rollBack();
-            return $this->errorResponse('Contrato no encontrado', 404);
+            return $this->errorResponse('Contrato no encontrado.', 404);
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->errorResponse('Error al renovar el contrato: ' . $e->getMessage(), 500);
@@ -133,11 +152,24 @@ class ContractService extends ResponseService
 
 
 
-
     public function terminateContract(string $id, string $reason): JsonResponse
     {
         try {
             $contract = Contract::findOrFail($id);
+
+            // Verificar si el contrato es renovado y el empleado tiene más de un contrato activo
+            $activeContracts = Contract::where('employee_id', $contract->employee_id)
+                ->where('is_active', true)
+                ->orderBy('start_date', 'asc') // Ordenar por la fecha de inicio
+                ->get();
+
+            // Impedir la terminación si hay más de un contrato activo y este es renovado
+            if ($activeContracts->count() > 1 && $activeContracts->first()->id === $contract->id) {
+                return $this->errorResponse(
+                    'No se puede terminar este contrato porque está relacionado con una renovación activa.',
+                    400
+                );
+            }
 
             // Obtener el límite mínimo de días desde la configuración
             $minDaysToTerminate = DB::table('configurations')
@@ -173,12 +205,21 @@ class ContractService extends ResponseService
     {
         return [
             'id' => $contract->id,
-            'employee' => $contract->employee ? $contract->employee->only(['id', 'first_name', 'last_name']) : null,
+            'employee' => $contract->employee ? [
+                'id' => $contract->employee->id,
+                'identification' => $contract->employee->identification,
+                'full_name' => $contract->employee->full_name,
+                'organization' => [
+                    'position' => $contract->employee->position?->name ?? 'No especificado',
+                    'unit' => $contract->employee->position?->unit?->name ?? 'No especificado',
+                    'direction' => $contract->employee->position?->unit?->direction?->name ?? 'No especificado',
+                ],
+            ] : null,
             'contract_type' => $contract->contractType ? $contract->contractType->only(['id', 'name']) : null,
-            'start_date' => $contract->start_date,
-            'end_date' => $contract->end_date,
+            'start_date' => $contract->start_date ? Carbon::parse($contract->start_date)->format('Y-m-d') : null,
+            'end_date' => $contract->end_date ? Carbon::parse($contract->end_date)->format('Y-m-d') : null,
             'termination_reason' => $contract->termination_reason,
-            'is_active' => $contract->is_active,
+            'status' => $contract->is_active ? 'Activo' : 'Finalizado',
         ];
     }
 }

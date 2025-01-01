@@ -26,13 +26,17 @@ class EmployeeService
             'address',
             'position' => function ($query) {
                 $query->withTrashed();
-            }
+            },
+            'contracts' => function ($query) {
+                $query->where('is_active', true);
+            }, 
         ])
             ->get()
             ->map(function ($employee) {
                 $employee->full_name = $employee->getFullNameAttribute();
                 $employee->employee_name = $employee->getNameAttribute();
                 $employee->photo = $employee->userPhoto();
+                $employee->has_active_contract = $employee->contracts->isNotEmpty(); 
                 unset($employee->contact_id, $employee->address_id, $employee->position_id);
                 return $employee;
             })

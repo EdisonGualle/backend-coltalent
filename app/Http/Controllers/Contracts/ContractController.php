@@ -45,10 +45,11 @@ class ContractController extends Controller
     /**
      * Renovar un contrato existente.
      */
-    public function renew(RenewContractRequest $request, string $id): JsonResponse
+    public function renew(string $id): JsonResponse
     {
         return $this->contractService->renewContract($id);
     }
+    
 
     /**
      * Terminar un contrato.
