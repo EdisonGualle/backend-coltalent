@@ -19,17 +19,41 @@ class CreateHolidayRequest extends FormRequest
                 'required',
                 'date',
                 function ($attribute, $value, $fail) {
+                    // Validar si ya existe un día festivo recurrente activo para la misma fecha (día y mes)
                     $isRecurringExists = Holiday::where('is_recurring', true)
                         ->whereRaw("DATE_FORMAT(date, '%m-%d') = DATE_FORMAT(?, '%m-%d')", [$value])
                         ->whereNull('deleted_at')
                         ->exists();
 
                     if ($isRecurringExists) {
-                        $fail("Ya existe un día festivo recurrente para la fecha {$value}.");
+                        $fail("Ya existe un día festivo recurrente para la fecha seleccionada.");
+                    }
+
+
+                    // Validar si ya existe la misma fecha exacta entre los días festivos activos
+                    $exactDateExists = Holiday::where('date', $value)
+                        ->whereNull('deleted_at') // Solo entre los activos
+                        ->exists();
+
+                    if ($exactDateExists) {
+                        $fail("Ya existe un día festivo activo con la fecha exacta seleccionada.");
                     }
                 },
             ],
-            'name' => 'required|string|max:100',
+            'name' => [
+                'required',
+                'string',
+                'max:100',
+                // function ($attribute, $value, $fail) {
+                //     $nameExists = Holiday::where('name', $value)
+                //         ->whereNull('deleted_at') // Solo entre los registros activos
+                //         ->exists();
+
+                //     if ($nameExists) {
+                //         $fail("Ya existe un día festivo activo con este nombre.");
+                //     }
+                // },
+            ],
             'is_recurring' => 'required|boolean',
             'applies_to_all' => 'required|boolean',
         ];

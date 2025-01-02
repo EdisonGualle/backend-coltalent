@@ -7,6 +7,7 @@ use App\Http\Requests\Holidays\CreateHolidayRequest;
 use App\Http\Requests\Holidays\UpdateHolidayRequest;
 use App\Services\Holidays\HolidayService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class HolidayController extends Controller
 {
@@ -22,7 +23,7 @@ class HolidayController extends Controller
      */
     public function index(): JsonResponse
     {
-        return $this->holidayService->getAllHolidays(true);
+        return $this->holidayService->getAllHolidays(false);
     }
 
     /**

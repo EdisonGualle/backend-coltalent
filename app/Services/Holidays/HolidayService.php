@@ -7,6 +7,8 @@ use Illuminate\Http\JsonResponse;
 use App\Services\ResponseService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class HolidayService extends ResponseService
 {
@@ -34,7 +36,6 @@ class HolidayService extends ResponseService
     {
         try {
             DB::beginTransaction();
-
             $holiday = Holiday::create($data);
 
             DB::commit();
@@ -63,7 +64,6 @@ class HolidayService extends ResponseService
     {
         try {
             DB::beginTransaction();
-
             $holiday = Holiday::findOrFail($id);
             $holiday->update($data);
 
@@ -85,7 +85,7 @@ class HolidayService extends ResponseService
             $holiday = Holiday::findOrFail($id);
             $holiday->delete();
 
-            return $this->successResponse('Día festivo eliminado con éxito');
+            return $this->successResponse('Día festivo eliminado con éxito', ['id' => $id]);
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Día festivo no encontrado.', 404);
         } catch (\Exception $e) {
@@ -128,9 +128,9 @@ class HolidayService extends ResponseService
         return [
             'id' => $holiday->id,
             'name' => $holiday->name,
-            'date' => $holiday->date,
-            'is_recurring' => $holiday->is_recurring ? 'Recurrente' : 'No recurrente',
-            'applies_to_all' => $holiday->applies_to_all ? 'Aplica a todos' : 'Aplica a algunos',
+            'date' => Carbon::parse($holiday->date)->translatedFormat('j \d\e F \d\e Y'),
+            'is_recurring' => $holiday->is_recurring,
+            'applies_to_all' => $holiday->applies_to_all,
             'status' => $holiday->deleted_at ? 'Inactivo' : 'Activo',
         ];
     }
