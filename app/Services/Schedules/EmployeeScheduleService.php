@@ -281,9 +281,9 @@ class EmployeeScheduleService extends ResponseService
                 'identification' => $employee->identification,
                 'full_name' => $employee->full_name,
                 'organization' => [
-                    'position' => $employee->position->name ?? 'No especificado',
-                    'unit' => $employee->unit->name ?? 'No especificado',
-                    'direction' => $employee->finalDirection?->name ?? 'No especificado',
+                    'position' => $employee->position->name ?? 'N/A',
+                    'unit' => $employee->unit->name ?? 'N/A',
+                    'direction' => $employee->finalDirection?->name ?? 'N/A',
                 ],
             ],
             'schedule' => [
