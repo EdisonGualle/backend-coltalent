@@ -15,9 +15,6 @@ class OvertimeWorkService extends ResponseService
     /**
      * Crear un registro de trabajo.
      */
-    /**
-     * Crear un registro de trabajo.
-     */
     public function createWorkRecord(array $data): JsonResponse
     {
         try {
@@ -128,12 +125,9 @@ class OvertimeWorkService extends ResponseService
             return $this->successResponse('Registro creado correctamente.', $this->formatWorkRecord($workRecord));
         } catch (\Exception $e) {
             DB::rollBack();
-            return $this->errorResponse('Error al crear el registro: ' . $e->getMessage(), 400);
+            return $this->errorResponse('' . $e->getMessage(), 400);
         }
     }
-
-
-
 
 
     private function isHoliday(Carbon $date, int $employeeId): ?array
@@ -183,9 +177,6 @@ class OvertimeWorkService extends ResponseService
         Log::info("La fecha no es festiva.");
         return null; // No es un día festivo
     }
-
-
-
 
     private function validateAndCalculateForHoliday(
         $startTime,
@@ -242,9 +233,6 @@ class OvertimeWorkService extends ResponseService
 
         return $workedHours;
     }
-
-
-
 
 
     private function validateAndCalculateForRestDay(
@@ -316,7 +304,7 @@ class OvertimeWorkService extends ResponseService
         if (isset($data['break_start_time']) || isset($data['break_end_time'])) {
             throw new \Exception("Las horas de descanso no aplican para registros de horas extras.");
         }
-        
+
         if ($startTime->lt($workEnd)) {
             throw new \Exception("Las horas extras deben comenzar después del horario laboral: {$workEnd->format('H:i')}.");
         }
@@ -393,6 +381,7 @@ class OvertimeWorkService extends ResponseService
         try {
             $records = OvertimeWork::with('employee')
                 ->whereNull('deleted_at') // Solo registros activos
+                ->orderBy('id', 'desc') // Orden descendente por `id`
                 ->get();
 
             $formattedRecords = $records->map(fn($record) => $this->formatWorkRecord($record));
@@ -444,54 +433,138 @@ class OvertimeWorkService extends ResponseService
         }
     }
 
+
     /**
-     * Eliminar registros de trabajo en rango.
+     * Eliminar múltiples asignaciones.
      */
     public function deleteWorkRecords(array $recordIds): JsonResponse
     {
         try {
             DB::beginTransaction();
-
-            $records = OvertimeWork::whereIn('id', $recordIds)
+    
+            // Validar que el array no esté vacío
+            if (empty($recordIds)) {
+                throw new \Exception('El array de IDs de registros está vacío.');
+            }
+    
+            // Obtener los registros activos
+            $recordsToDelete = OvertimeWork::whereIn('id', $recordIds)
                 ->whereNull('deleted_at') // Solo registros activos
                 ->get();
-
-            if ($records->isEmpty()) {
+    
+            // Validar si hay registros para eliminar
+            if ($recordsToDelete->isEmpty()) {
                 return $this->errorResponse('No se encontraron registros activos para eliminar.', 400);
             }
-
-            foreach ($records as $record) {
-                $workDate = Carbon::parse($record->date);
-                if ($workDate->isToday() || $workDate->isPast()) {
-                    throw new \Exception("No se pueden eliminar registros de fechas pasadas o actuales: {$record->date}.");
+    
+            // Almacenar los IDs eliminados correctamente y los fallidos
+            $deletedIds = [];
+            $failedIds = [];
+    
+            // Intentar eliminar cada registro
+            foreach ($recordsToDelete as $record) {
+                try {
+                    $workDate = Carbon::parse($record->date);
+                    if ($workDate->isToday() || $workDate->isPast()) {
+                        throw new \Exception("No se puede eliminar el registro con fecha pasada o actual: {$record->date}.");
+                    }
+    
+                    $record->delete(); // Eliminación lógica
+                    $deletedIds[] = $record->id; // Agregar a los eliminados
+                } catch (\Exception $e) {
+                    $failedIds[] = $record->id; // Agregar a los fallidos
                 }
-
-                $record->delete(); // Eliminación lógica
             }
-
+    
             DB::commit();
-            return $this->successResponse("Registros eliminados correctamente: {$records->count()} registros afectados.");
+    
+            // Si no se eliminó ningún registro
+            if (empty($deletedIds)) {
+                return $this->errorResponse(
+                    "No se pudieron eliminar registros. Los siguientes fallaron: " . implode(", ", $failedIds),
+                    400
+                );
+            }
+    
+            // Retornar respuesta con los IDs eliminados y fallidos
+            return $this->successResponse(
+                count($deletedIds) === 1
+                    ? "Se eliminó 1 registro correctamente. Algunos no se pudieron eliminar."
+                    : "Se eliminaron " . count($deletedIds) . " registros correctamente. Algunos no se pudieron eliminar.",
+                [
+                    'deleted_ids' => $deletedIds,
+                    'failed_ids' => $failedIds
+                ]
+            );
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->errorResponse('Error al eliminar los registros: ' . $e->getMessage(), 400);
         }
     }
 
+    private function getDayType(Carbon $date, int $employeeId): string
+    {
+        // Verificar si es un día festivo
+        $holidayInfo = $this->isHoliday($date, $employeeId);
+        if ($holidayInfo) {
+            return 'Trabajo en día festivo';
+        }
+
+        // Verificar si es día de descanso
+        $schedule = DB::table('employee_schedules')
+            ->join('schedules', 'employee_schedules.schedule_id', '=', 'schedules.id')
+            ->where('employee_schedules.employee_id', $employeeId)
+            ->where('employee_schedules.is_active', true)
+            ->whereDate('employee_schedules.start_date', '<=', $date)
+            ->where(function ($query) use ($date) {
+                $query->whereNull('employee_schedules.end_date')
+                    ->orWhereDate('employee_schedules.end_date', '>=', $date);
+            })
+            ->first();
+
+        if ($schedule) {
+            $restDays = json_decode($schedule->rest_days, true);
+            if (in_array($date->dayOfWeek, $restDays)) {
+                return 'Trabajo en día de descanso';
+            }
+        }
+
+        // Si no es festivo ni día de descanso, es un día normal
+        return 'Horas extras';
+    }
+
+
     /**
      * Formatear un registro de trabajo para la respuesta.
      */
     private function formatWorkRecord(OvertimeWork $workRecord): array
     {
+        $date = Carbon::parse($workRecord->date);
+        $dayType = $this->getDayType($date, $workRecord->employee_id);
+        $employee = $workRecord->employee;
+        $formattedDate = $date->translatedFormat('j \d\e F \d\e Y');
         return [
             'id' => $workRecord->id,
-            'employee' => $workRecord->employee->only(['id', 'first_name', 'last_name']),
-            'date' => $workRecord->date,
-            'start_time' => $workRecord->start_time,
-            'end_time' => $workRecord->end_time,
+            'employee' => [
+                'id' => $employee->id,
+                'identification' => $employee->identification ?? 'N/A',
+                'full_name' => $employee->full_name,
+                'organization' => [
+                    'position' => $employee->position->name ?? 'N/A',
+                    'unit' => $employee->position->unit->name ?? 'N/A',
+                    'direction' => $employee->position->unit->direction->name ?? 'N/A',
+                ],
+            ],
+            'date' => $formattedDate,
+            'start_time' => Carbon::parse($workRecord->start_time)->format('H:i'),
+            'end_time' => Carbon::parse($workRecord->end_time)->format('H:i'),
+            'break_start_time' => $workRecord->break_start_time ? Carbon::parse($workRecord->break_start_time)->format('H:i') : null,
+            'break_end_time' => $workRecord->break_end_time ? Carbon::parse($workRecord->break_end_time)->format('H:i') : null,
             'worked_value' => $workRecord->worked_value,
             'reason' => $workRecord->reason,
             'generates_compensatory' => $workRecord->generates_compensatory,
-            'created_at' => $workRecord->created_at->format('Y-m-d H:i:s'),
+            'day_type' => $dayType,
+            'created_at' => $workRecord->created_at->format('Y-m-d'),
         ];
     }
 }

@@ -15,7 +15,7 @@ class DeleteOvertimeWorkRecordsRequest extends FormRequest
     {
         return [
             'record_ids' => 'required|array|min:1',
-            'record_ids.*' => 'exists:overtime_work,id',
+            'record_ids.*' => 'exists:overtime_works,id',
         ];
     }
 
