@@ -97,9 +97,6 @@ class StoreLeaveRequest extends FormRequest
 
             if ($overlappingApprovedLeaves) {
                 $validator->errors()->add('start_date', 'Ya tiene un permiso aprobado que cubre el período seleccionado.');
-                if (!empty($data['end_date'])) {
-                    $validator->errors()->add('end_date', 'Ya tiene un permiso aprobado que cubre el período seleccionado.');
-                }
             }
 
             // Verificar permisos pendientes
@@ -111,9 +108,6 @@ class StoreLeaveRequest extends FormRequest
 
             if ($overlappingPendingLeaves) {
                 $validator->errors()->add('start_date', 'Tiene un permiso pendiente de aprobación.');
-                if (!empty($data['end_date'])) {
-                    $validator->errors()->add('end_date', 'Tiene un permiso pendiente de aprobación.');
-                }
             }
         });
     }

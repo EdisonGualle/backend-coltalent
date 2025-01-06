@@ -16,6 +16,7 @@ class LeaveType extends Model
         'max_duration', 
         'requires_document', 
         'advance_notice_days', 
+        'deducts_from_vacation',
         'time_unit',
         'icon',
         'color'

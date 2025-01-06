@@ -2,6 +2,7 @@
 
 namespace App\Services\Work;
 
+use App\Models\Contracts\Contract;
 use App\Models\Work\OvertimeWork;
 use App\Models\Employee\Employee;
 use Illuminate\Http\JsonResponse;
@@ -120,6 +121,18 @@ class OvertimeWorkService extends ResponseService
                 'reason' => $data['reason'],
                 'generates_compensatory' => $data['generates_compensatory'] ?? true,
             ]);
+
+
+            // Actualizar el saldo de vacaciones si genera compensación
+            if ($workRecord->generates_compensatory) {
+                $contract = Contract::where('employee_id', $data['employee_id'])
+                    ->where('is_active', true)
+                    ->first();
+
+                if ($contract) {
+                    $contract->increment('vacation_balance', $workRecord->worked_value);
+                }
+            }
 
             DB::commit();
             return $this->successResponse('Registro creado correctamente.', $this->formatWorkRecord($workRecord));
@@ -441,26 +454,26 @@ class OvertimeWorkService extends ResponseService
     {
         try {
             DB::beginTransaction();
-    
+
             // Validar que el array no esté vacío
             if (empty($recordIds)) {
                 throw new \Exception('El array de IDs de registros está vacío.');
             }
-    
+
             // Obtener los registros activos
             $recordsToDelete = OvertimeWork::whereIn('id', $recordIds)
                 ->whereNull('deleted_at') // Solo registros activos
                 ->get();
-    
+
             // Validar si hay registros para eliminar
             if ($recordsToDelete->isEmpty()) {
                 return $this->errorResponse('No se encontraron registros activos para eliminar.', 400);
             }
-    
+
             // Almacenar los IDs eliminados correctamente y los fallidos
             $deletedIds = [];
             $failedIds = [];
-    
+
             // Intentar eliminar cada registro
             foreach ($recordsToDelete as $record) {
                 try {
@@ -468,16 +481,16 @@ class OvertimeWorkService extends ResponseService
                     if ($workDate->isToday() || $workDate->isPast()) {
                         throw new \Exception("No se puede eliminar el registro con fecha pasada o actual: {$record->date}.");
                     }
-    
+
                     $record->delete(); // Eliminación lógica
                     $deletedIds[] = $record->id; // Agregar a los eliminados
                 } catch (\Exception $e) {
                     $failedIds[] = $record->id; // Agregar a los fallidos
                 }
             }
-    
+
             DB::commit();
-    
+
             // Si no se eliminó ningún registro
             if (empty($deletedIds)) {
                 return $this->errorResponse(
@@ -485,12 +498,12 @@ class OvertimeWorkService extends ResponseService
                     400
                 );
             }
-    
+
             // Retornar respuesta con los IDs eliminados y fallidos
             return $this->successResponse(
                 count($deletedIds) === 1
-                    ? "Se eliminó 1 registro correctamente. Algunos no se pudieron eliminar."
-                    : "Se eliminaron " . count($deletedIds) . " registros correctamente. Algunos no se pudieron eliminar.",
+                ? "Se eliminó 1 registro correctamente. Algunos no se pudieron eliminar."
+                : "Se eliminaron " . count($deletedIds) . " registros correctamente. Algunos no se pudieron eliminar.",
                 [
                     'deleted_ids' => $deletedIds,
                     'failed_ids' => $failedIds

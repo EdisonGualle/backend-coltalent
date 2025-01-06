@@ -48,10 +48,13 @@ class ContractService extends ResponseService
                 ? Carbon::parse($data['start_date'])->addMonths($contractType->max_duration_months)
                 : null;
 
+                $vacationBalance = $contractType->vacation_days_per_year ?? null;
+
             $contract = $employee->contracts()->create([
                 'contract_type_id' => $data['contract_type_id'],
                 'start_date' => $data['start_date'],
                 'end_date' => $endDate,
+                'vacation_balance' => $vacationBalance, 
                 'is_active' => true,
             ]);
 

@@ -18,7 +18,8 @@ class Contract extends Model
         'start_date',
         'end_date',
         'termination_reason',
-        'is_active'
+        'vacation_balance',
+        'is_active',
     ];
 
     public function employee()

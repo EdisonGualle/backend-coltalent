@@ -22,27 +22,16 @@ class StoreLeaveTypeRequest extends FormRequest
                     if ($this->input('time_unit') === 'Días') {
                         if (!preg_match('/^\d+$/', $value)) {
                             $fail('El formato de la duración máxima en días es incorrecto.');
-                        } elseif ((int) $value < 1 || (int) $value > 30) {
-                            $fail('La duración máxima en días debe estar entre 1 y 30 días.');
                         }
                     } elseif ($this->input('time_unit') === 'Horas') {
                         if (!preg_match('/^(0?[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$/', $value)) {
                             $fail('El formato de la duración máxima en horas es incorrecto.');
-                        } else {
-                            // Convertir a minutos para validar el rango
-                            list($hours, $minutes) = explode(':', $value);
-                            $totalMinutes = $hours * 60 + $minutes;
-                            $minMinutes = 30; // 00:30
-                            $maxMinutes = 450; // 07:30
-                            if ($totalMinutes < $minMinutes || $totalMinutes > $maxMinutes) {
-                                $fail('La duración máxima en horas debe estar entre 00:30 y 07:30 horas.');
-                            }
                         }
                     }
                 },
             ],
             'requires_document' => 'nullable|in:Si,No',
-            'advance_notice_days' => 'required|integer|min:1|max:10',
+            'advance_notice_days' => 'required|integer',
             'time_unit' => 'nullable|in:Días,Horas',
             'icon' => 'required|string|max:30',
             'color' => 'required|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/'

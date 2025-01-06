@@ -18,17 +18,22 @@ class UniquePositionForActiveEmployees implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
+        // Obtener estado "activo"
         $activeState = UserState::where('name', 'activo')->first();
 
+        // Verificar si el cargo está asignado a un empleado activo con contrato activo
         $exists = Employee::where('position_id', $value)
             ->where('id', '!=', $this->employeeId)
             ->whereHas('user', function ($query) use ($activeState) {
                 $query->where('user_state_id', $activeState->id);
             })
+            ->whereHas('contracts', function ($query) {
+                $query->where('is_active', true);
+            })
             ->exists();
 
         if ($exists) {
-            $fail('Este cargo ya está asignado a un empleado activo.');
+            $fail('Este cargo ya está asignado a un empleado con contrato activo.');
         }
     }
 }

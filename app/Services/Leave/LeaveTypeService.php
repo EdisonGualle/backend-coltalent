@@ -13,7 +13,17 @@ class LeaveTypeService extends ResponseService
     {
         $isActive = is_null($leaveType->deleted_at) ? 'Activo' : 'Inactivo';
         return array_merge(
-            $leaveType->only('id', 'name', 'description', 'max_duration', 'requires_document', 'advance_notice_days', 'time_unit', 'icon'),
+            $leaveType->only(
+                'id',
+                'name',
+                'description',
+                'max_duration',
+                'requires_document',
+                'advance_notice_days',
+                'time_unit',
+                'icon',
+                'deducts_from_vacation'
+            ),
             ['status' => $isActive]
         );
     }

@@ -16,7 +16,7 @@ class CreateOvertimeWorkRequest extends FormRequest
     {
         return [
             'employee_id' => 'required|exists:employees,id',
-            'date' => 'required|date|after:today',
+            'date' => 'required|date',
             'start_time' => [
                 'nullable',
                 'date_format:H:i',
@@ -67,7 +67,6 @@ class CreateOvertimeWorkRequest extends FormRequest
             'employee_id.exists' => 'El empleado no existe.',
             'date.required' => 'La fecha del trabajo es obligatoria.',
             'date.date' => 'La fecha debe ser válida.',
-            'date.after' => 'La fecha debe ser una fecha futura.',
             'start_time.date_format' => 'La hora de inicio debe estar en formato HH:MM.',
             'end_time.date_format' => 'La hora de fin debe estar en formato HH:MM.',
             'end_time.after' => 'La hora de fin debe ser posterior a la hora de inicio.',
