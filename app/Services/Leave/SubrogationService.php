@@ -32,7 +32,9 @@ class SubrogationService extends ResponseService
             $directionId = $employeePosition->direction ? $employeePosition->direction->id : null;
 
             // Construir la consulta inicial para empleados disponibles
-            $query = Employee::query()->where('id', '!=', $employeeId);
+            $query = Employee::query()
+                ->where('id', '!=', $employeeId)
+                ->whereHas('currentContract');
 
             // Filtrar por unidad o dirección del empleado solicitante
             if ($unitId) {

@@ -97,7 +97,7 @@ class LeaveCommentService extends ResponseService
             DB::rollBack();
 
 
-            return $this->errorResponse('Error al realizar la acción: ' . $e->getMessage(), 500);
+            return $this->errorResponse('' . $e->getMessage(), 500);
         }
     }
 
@@ -215,6 +215,14 @@ class LeaveCommentService extends ResponseService
 
 
             if ($nextApprover) {
+
+                // Validar que el próximo aprobador tenga un contrato activo
+                if (!$nextApprover->currentContract) {
+                    throw new \Exception(
+                        "El próximo aprobador no tiene un contrato activo asociado. Por favor, contacte con la Unidad de Talento Humano."
+                    );
+                }
+
                 // Crear comentario para el siguiente aprobador
                 LeaveComment::create([
                     'leave_id' => $leave->id,
@@ -305,7 +313,7 @@ class LeaveCommentService extends ResponseService
         if (!$assigner->user || !$assigner->user->email) {
             throw new \Exception("El asignador no tiene un usuario válido o un correo electrónico asociado.");
         }
-    
+
         if (!$delegate->user || !$delegate->user->email) {
             throw new \Exception("El empleado delegado no tiene un usuario válido o un correo electrónico asociado.");
         }

@@ -85,6 +85,14 @@ class LeaveService extends ResponseService
                 return $this->errorResponse("El aprobador no tiene un usuario asociado.", 400);
             }
 
+            // Validar que el aprobador tenga un contrato activo
+            if (!$approver->currentContract) {
+                return $this->errorResponse(
+                    "El aprobador no tiene un contrato activo. Por favor, contacte con la Unidad de Talento Humano.",
+                    400
+                );
+            }
+
             // Crear la notificación para el primer aprobador
             $this->createPendingNotification($leave, $approverId);
 

@@ -17,6 +17,15 @@ class WeeklyScheduleService extends ResponseService
             $startOfWeek = $currentDate->copy()->startOfWeek(1); // 1 es para Lunes
             $endOfWeek = $startOfWeek->copy()->addDays(6); // Siempre domingo
 
+            // Verificar si el empleado tiene un horario activo
+            $hasActiveSchedule = EmployeeSchedule::where('employee_id', $employeeId)
+                ->where('is_active', true)
+                ->exists();
+
+            if (!$hasActiveSchedule) {
+                return $this->successResponse('El empleado no tiene un horario asignado.', []);
+            }
+
             $weeklySchedule = [];
             $currentDay = $startOfWeek->copy();
 
