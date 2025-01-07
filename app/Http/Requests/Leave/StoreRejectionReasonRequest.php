@@ -11,6 +11,8 @@ class StoreRejectionReasonRequest extends FormRequest
     {
         return [
             'reason' => 'required|string|max:100|unique:rejection_reasons,reason',
+            'leave_type_ids' => 'nullable|array',
+            'leave_type_ids.*' => 'exists:leave_types,id',
         ];
     }
 

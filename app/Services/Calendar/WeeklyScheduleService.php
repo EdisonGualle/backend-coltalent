@@ -4,8 +4,6 @@ namespace App\Services\Calendar;
 
 use App\Models\Schedules\EmployeeSchedule;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use App\Services\ResponseService;
 use Illuminate\Http\JsonResponse;
 
@@ -21,9 +19,6 @@ class WeeklyScheduleService extends ResponseService
 
             $weeklySchedule = [];
             $currentDay = $startOfWeek->copy();
-
-            // Log para verificar las fechas de inicio y fin
-            Log::info("Generando horario semanal para la semana del {$startOfWeek->toDateString()} al {$endOfWeek->toDateString()}");
 
             while ($currentDay->lte($endOfWeek)) { // Asegura que se incluyan todos los días
                 $dayInfo = [
@@ -63,9 +58,6 @@ class WeeklyScheduleService extends ResponseService
                         ];
                     }
                 }
-
-                // Agregar día al log
-                Log::info("Día generado: ", $dayInfo);
 
                 $weeklySchedule[] = $dayInfo;
                 $currentDay->addDay();

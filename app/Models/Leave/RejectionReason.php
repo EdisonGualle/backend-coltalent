@@ -19,6 +19,13 @@ class RejectionReason extends Model
         'updated_at'
     ];
 
+     // Relación muchos a muchos con LeaveType
+     public function leaveTypes()
+     {
+         return $this->belongsToMany(LeaveType::class, 'leave_type_rejection_reason');
+     }
+     
+
     public $timestamps = false;
 
     public function comments()

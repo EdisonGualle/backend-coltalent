@@ -22,6 +22,8 @@ class UpdateRejectionReasonRequest extends FormRequest
                 'max:255',
                 Rule::unique('rejection_reasons', 'reason')->ignore($this->route('rejection_reason')),
             ],
+            'leave_type_ids' => 'nullable|array', 
+            'leave_type_ids.*' => 'exists:leave_types,id', 
         ];
     }
 
