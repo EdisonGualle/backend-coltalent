@@ -33,7 +33,6 @@ class CalendarService extends ResponseService
                     'type' => null,
                     'reason' => null,
                     'work_schedule' => null,
-                    'available_times' => [],
                 ];
 
                 // 1. Verificar si es festivo general o asignado
@@ -68,10 +67,6 @@ class CalendarService extends ResponseService
                                     : null,
                             ];
 
-                            $dayInfo['available_times'] = $this->calculateAvailableTimes(
-                                $schedule->schedule,
-                                $currentDate
-                            );
                         }
                     }
                 }
@@ -133,36 +128,5 @@ class CalendarService extends ResponseService
             })
             ->where('start_date', '<=', $date->toDateString())
             ->first();
-    }
-
-    private function calculateAvailableTimes($schedule, Carbon $date): array
-    {
-        $availableTimes = [];
-
-        $workStart = Carbon::parse($schedule->start_time);
-        $workEnd = Carbon::parse($schedule->end_time);
-
-        // Excluir horas de descanso
-        $breakStart = $schedule->break_start_time ? Carbon::parse($schedule->break_start_time) : null;
-        $breakEnd = $schedule->break_end_time ? Carbon::parse($schedule->break_end_time) : null;
-
-        if ($breakStart && $breakEnd) {
-            $availableTimes[] = [
-                'start_time' => $workStart->format('H:i'),
-                'end_time' => $breakStart->format('H:i'),
-            ];
-
-            $availableTimes[] = [
-                'start_time' => $breakEnd->format('H:i'),
-                'end_time' => $workEnd->format('H:i'),
-            ];
-        } else {
-            $availableTimes[] = [
-                'start_time' => $workStart->format('H:i'),
-                'end_time' => $workEnd->format('H:i'),
-            ];
-        }
-
-        return $availableTimes;
     }
 }

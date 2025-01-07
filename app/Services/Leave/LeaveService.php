@@ -30,29 +30,38 @@ class LeaveService extends ResponseService
         DB::beginTransaction();
 
         try {
+            $employee = Employee::findOrFail($employee_id);
+
+            // Validar que el empleado tenga un contrato activo
+            if (!$employee->currentContract) {
+                return $this->errorResponse("No puedes solicitar un permiso porque no tienes un contrato activo asociado.", 400);
+            }
+
             // Establecer el estado inicial de la solicitud de permiso
             $data['employee_id'] = $employee_id;
             $data['state_id'] = LeaveState::where('name', 'Pendiente')->first()->id;
 
             // Validación: verificar si el empleado tiene una subrogación activa para el rango de fechas
-            try {
-                $activeDelegationExists = Delegation::where('delegate_id', $employee_id)
-                    ->where('status', 'Activa') // Filtrar solo delegaciones activas
-                    ->whereHas('leave', function ($query) use ($data) {
-                        $query->where(function ($subQuery) use ($data) {
-                            $subQuery->whereBetween('start_date', [$data['start_date'], $data['end_date']])
-                                     ->orWhereBetween('end_date', [$data['start_date'], $data['end_date']]);
-                        });
-                    })
-                    ->exists();
-            
-                if ($activeDelegationExists) {
-                    return $this->errorResponse("El empleado tiene una subrogación activa para el rango de fechas solicitado.", 400);
+            if (!empty($data['end_date'])) {
+                try {
+                    $activeDelegationExists = Delegation::where('delegate_id', $employee_id)
+                        ->where('status', 'Activa') // Filtrar solo delegaciones activas
+                        ->whereHas('leave', function ($query) use ($data) {
+                            $query->where(function ($subQuery) use ($data) {
+                                $subQuery->whereBetween('start_date', [$data['start_date'], $data['end_date']])
+                                    ->orWhereBetween('end_date', [$data['start_date'], $data['end_date']]);
+                            });
+                        })
+                        ->exists();
+
+                    if ($activeDelegationExists) {
+                        return $this->errorResponse("El empleado tiene una subrogación activa para el rango de fechas solicitado.", 400);
+                    }
+                } catch (\Exception $e) {
+                    return $this->errorResponse("Error al verificar subrogaciones activas: " . $e->getMessage(), 500);
                 }
-            } catch (\Exception $e) {
-                return $this->errorResponse("Error al verificar subrogaciones activas: " . $e->getMessage(), 500);
+
             }
-            
             // Crear la solicitud de permiso
             $leave = Leave::create($data);
 
@@ -81,7 +90,7 @@ class LeaveService extends ResponseService
 
             // Enviar correo de constancia al empleado solicitante
             $approver = Employee::findOrFail($approverId);
-            
+
             if (!$employee->user->email) {
                 return $this->errorResponse("El empleado no tiene un correo electrónico válido.", 400);
             }

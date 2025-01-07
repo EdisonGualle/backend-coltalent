@@ -4,6 +4,7 @@ use App\Http\Controllers\Address\AddressController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Calendar\CalendarController;
+use App\Http\Controllers\Calendar\WeeklyScheduleController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\Contracts\ContractController;
 use App\Http\Controllers\Contracts\ContractTypeController;
@@ -303,5 +304,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('employees/contracts/active', [EmployeeController::class, 'activeEmployees']);
     Route::get('employees/{employeeId}/calendar', [CalendarController::class, 'generateCalendar']);
+    Route::get('employees/{employeeId}/weekly-schedule', [WeeklyScheduleController::class, 'getWeeklySchedule']);
 
 });
