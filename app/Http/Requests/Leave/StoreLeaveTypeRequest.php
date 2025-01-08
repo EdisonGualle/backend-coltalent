@@ -34,7 +34,7 @@ class StoreLeaveTypeRequest extends FormRequest
             'advance_notice_days' => 'required|integer',
             'time_unit' => 'nullable|in:Días,Horas',
             'icon' => 'required|string|max:30',
-            'color' => 'required|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/'
+            'deducts_from_vacation' => 'required|boolean',
         ];
     }
 
@@ -71,10 +71,6 @@ class StoreLeaveTypeRequest extends FormRequest
             'icon.required' => 'El icono es obligatorio.',
             'icon.string' => 'El icono debe ser una cadena de texto.',
             'icon.max' => 'El icono no puede exceder los 30 caracteres.',
-            'color.required' => 'El color es obligatorio.',
-            'color.string' => 'El color debe ser una cadena de texto.',
-            'color.max' => 'El color no puede exceder los 7 caracteres.',
-            'color.regex' => 'El color debe ser un valor hexadecimal válido (ej. #FFFFFF).'
         ];
     }
 }

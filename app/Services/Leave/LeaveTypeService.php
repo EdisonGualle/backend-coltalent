@@ -6,6 +6,8 @@ use App\Models\Leave\LeaveType;
 use App\Services\ResponseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Log; 
+
 
 class LeaveTypeService extends ResponseService
 {
@@ -48,9 +50,17 @@ class LeaveTypeService extends ResponseService
     public function createLeaveType(array $data): JsonResponse
     {
         try {
+            LOG::info('datos en el servicio: ', $data);
             $leaveType = LeaveType::create($data);
             return $this->successResponse('Tipo de permiso creado con éxito', $this->formatLeaveTypeData($leaveType), 201);
         } catch (\Exception $e) {
+              // Corregimos el uso de LOG::info con un contexto en formato de array
+        LOG::info('Error en el servicio:', [
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
             return $this->errorResponse('No se pudo crear el tipo de permiso: ' . $e->getMessage(), 500);
         }
     }

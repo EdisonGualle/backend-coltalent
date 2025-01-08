@@ -222,6 +222,7 @@ class ContractService extends ResponseService
             'start_date' => $contract->start_date ? Carbon::parse($contract->start_date)->format('Y-m-d') : null,
             'end_date' => $contract->end_date ? Carbon::parse($contract->end_date)->format('Y-m-d') : null,
             'termination_reason' => $contract->termination_reason,
+            'vacation_balance' => $contract->vacation_balance,
             'status' => $contract->is_active ? 'Activo' : 'Finalizado',
         ];
     }

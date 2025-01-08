@@ -43,7 +43,7 @@ class UpdateLeaveTypeRequest extends FormRequest
             'advance_notice_days' => 'nullable|integer|min:1|max:10',
             'time_unit' => 'nullable|in:Días,Horas',
             'icon' => 'nullable|string|max:30',
-            'color' => 'nullable|string|max:7|regex:/^#[0-9A-Fa-f]{6}$/',
+            'deducts_from_vacation' => 'nullable|boolean',
         ];
     }
 
@@ -75,9 +75,6 @@ class UpdateLeaveTypeRequest extends FormRequest
             'advance_notice_days.max' => 'El aviso previo no puede exceder los 10 días.',
             'time_unit.required' => 'La unidad de tiempo es obligatoria cuando la duración máxima está presente.',
             'time_unit.in' => 'La unidad de tiempo debe ser "Días" o "Horas".',
-            'color.string' => 'El color debe ser una cadena de texto.',
-            'color.max' => 'El color no puede exceder los 7 caracteres.',
-            'color.regex' => 'El color debe ser un valor hexadecimal válido (ej. #FFFFFF).'
         ];
     }
 }
