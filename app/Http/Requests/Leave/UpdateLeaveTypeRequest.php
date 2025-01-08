@@ -44,6 +44,7 @@ class UpdateLeaveTypeRequest extends FormRequest
             'time_unit' => 'nullable|in:Días,Horas',
             'icon' => 'nullable|string|max:30',
             'deducts_from_vacation' => 'nullable|boolean',
+            'flow_type' => 'nullable|in:inmediato,completo',
         ];
     }
 

@@ -19,6 +19,7 @@ class LeaveType extends Model
         'deducts_from_vacation',
         'time_unit',
         'icon',
+        'flow_type'
     ];
 
     protected $hidden = [

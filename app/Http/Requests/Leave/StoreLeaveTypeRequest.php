@@ -35,6 +35,7 @@ class StoreLeaveTypeRequest extends FormRequest
             'time_unit' => 'nullable|in:Días,Horas',
             'icon' => 'required|string|max:30',
             'deducts_from_vacation' => 'required|boolean',
+            'flow_type' => 'required|in:inmediato,completo',
         ];
     }
 

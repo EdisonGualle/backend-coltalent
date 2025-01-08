@@ -24,7 +24,8 @@ class LeaveTypeService extends ResponseService
                 'advance_notice_days',
                 'time_unit',
                 'icon',
-                'deducts_from_vacation'
+                'deducts_from_vacation',
+                'flow_type'
             ),
             ['status' => $isActive]
         );
