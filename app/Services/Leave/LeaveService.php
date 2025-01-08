@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use App\Mail\LeaveRequestedMail;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ApprovalNotificationMail;
+use App\Models\Contracts\Contract;
 use App\Models\Leave\Delegation;
 use App\Models\Other\Configuration;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +36,24 @@ class LeaveService extends ResponseService
             // Validar que el empleado tenga un contrato activo
             if (!$employee->currentContract) {
                 return $this->errorResponse("No puedes solicitar un permiso porque no tienes un contrato activo asociado.", 400);
+            }
+
+            $contract = $employee->currentContract;
+
+            // Validar si el tipo de permiso descuenta del saldo de vacaciones
+            $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+            if ($leaveType->deducts_from_vacation) {
+                // Calcular la duración del permiso
+                $durationString = $this->calculateDurationFromData($data);
+                $leaveDurationInDays = $this->convertDurationToDays($durationString);
+
+                // Validar si el saldo de vacaciones es suficiente
+                if ($contract->vacation_balance < $leaveDurationInDays) {
+                    return $this->errorResponse(
+                        "El saldo de vacaciones actual ({$this->formatVacationBalance($contract->vacation_balance)}) no es suficiente para cubrir la duración del permiso solicitado ({$this->formatVacationBalance($leaveDurationInDays)}).",
+                        400
+                    );
+                }
             }
 
             // Establecer el estado inicial de la solicitud de permiso
@@ -118,6 +137,60 @@ class LeaveService extends ResponseService
             return $this->errorResponse('No se pudo crear la solicitud de permiso: ' . $e->getMessage(), 500);
         }
     }
+
+    private function calculateDurationFromData(array $data): string
+    {
+        if (!empty($data['start_date']) && !empty($data['end_date'])) {
+            $start_date = Carbon::parse($data['start_date']);
+            $end_date = Carbon::parse($data['end_date']);
+            $days = $start_date->diffInDays($end_date) + 1;
+            return "{$days}d";
+        } elseif (!empty($data['start_time']) && !empty($data['end_time'])) {
+            $start_time = Carbon::parse($data['start_time']);
+            $end_time = Carbon::parse($data['end_time']);
+            $hours = $end_time->diffInHours($start_time);
+            return "{$hours}h";
+        }
+
+        return '0d';
+    }
+
+    private function getMaxDailyHours(): float
+    {
+        // Obtener el valor de la configuración 'max_daily_hours'
+        $maxDailyHours = Configuration::where('key', 'max_daily_hours')->value('value');
+
+        if (!$maxDailyHours) {
+            throw new \Exception("La configuración 'max_daily_hours' no está definida.");
+        }
+
+        // Convertir 'hh:mm' a horas decimales
+        [$hours, $minutes] = explode(':', $maxDailyHours);
+        return (float) $hours + ((float) $minutes / 60);
+    }
+
+    private function convertDurationToDays(string $duration): float
+    {
+        $days = 0;
+        $hours = 0;
+
+        // Extraer días y horas de la cadena
+        if (preg_match('/(\d+)\s*d/', $duration, $matches)) {
+            $days = (int) $matches[1];
+        }
+        if (preg_match('/(\d+)\s*h/', $duration, $matches)) {
+            $hours = (int) $matches[1];
+        }
+
+        // Obtener las horas máximas diarias configuradas
+        $maxDailyHours = $this->getMaxDailyHours();
+
+        // Convertir horas a días utilizando max_daily_hours
+        $hoursToDays = $hours / $maxDailyHours;
+
+        return $days + $hoursToDays;
+    }
+
 
     private function determineApprover(Employee $employee): int
     {
@@ -646,67 +719,46 @@ class LeaveService extends ResponseService
     public function getLeaveStatistics(int $employee_id): JsonResponse
     {
         try {
-            $totalPermissions = Leave::where('employee_id', $employee_id)->count();
-            $approvedPermissions = Leave::where('employee_id', $employee_id)->whereHas('state', function ($q) {
-                $q->where('name', 'Aprobado');
-            })->count();
-            $disapprovedPermissions = Leave::where('employee_id', $employee_id)->whereHas('state', function ($q) {
-                $q->where('name', 'Rechazado');
-            })->count();
+            // Consultas agregadas para reducir interacciones
+            $leaveStats = Leave::where('employee_id', $employee_id)
+                ->selectRaw("
+                    COUNT(*) as totalPermissions,
+                    SUM(CASE WHEN state_id = (SELECT id FROM leave_states WHERE name = 'Aprobado') THEN 1 ELSE 0 END) as approvedPermissions,
+                    SUM(CASE WHEN state_id = (SELECT id FROM leave_states WHERE name = 'Rechazado') THEN 1 ELSE 0 END) as disapprovedPermissions
+                ")
+                ->first();
 
-            $leaveTypes = LeaveType::all();
-            $leaveTypeDurations = [];
+            $leaveTypeDurations = Leave::where('employee_id', $employee_id)
+                ->whereHas('state', fn($q) => $q->where('name', 'Aprobado'))
+                ->groupBy('leave_type_id')
+                ->selectRaw("
+                    leave_type_id,
+                    SUM(DATEDIFF(end_date, start_date) + 1) as total_days,
+                    SEC_TO_TIME(SUM(TIMESTAMPDIFF(SECOND, start_time, end_time))) as total_hours
+                ")
+                ->get()
+                ->mapWithKeys(fn($row) => [
+                    LeaveType::find($row->leave_type_id)->name => [
+                        'total_in_days' => $row->total_days,
+                        'total_in_hours' => $row->total_hours,
+                    ]
+                ]);
 
-            foreach ($leaveTypes as $leaveType) {
-                $leaveTypeDurationInDays = 0;
-                $leaveTypeDurationInHours = 0;
-                $leaveTypeDurationInMinutes = 0;
+            // Obtener el contrato activo del empleado
+            $activeContract = Contract::where('employee_id', $employee_id)
+                ->where('is_active', true)
+                ->first();
 
-                $leaves = Leave::where('employee_id', $employee_id)
-                    ->where('leave_type_id', $leaveType->id)
-                    ->whereHas('state', function ($q) {
-                        $q->where('name', 'Aprobado');
-                    })
-                    ->get();
+            // Convertir vacation_balance a un formato amigable (30d 4h)
+            $vacationBalanceFormatted = $activeContract
+                ? $this->formatVacationBalance($activeContract->vacation_balance)
+                : '0d 0h';
 
-                foreach ($leaves as $leave) {
-                    if ($leave->start_date && $leave->end_date) {
-                        $start_date = new \DateTime($leave->start_date);
-                        $end_date = new \DateTime($leave->end_date);
-                        $interval = $start_date->diff($end_date);
-                        $days = $interval->days + 1; // Incluye el último día
-                        $leaveTypeDurationInDays += $days;
-                    } elseif ($leave->start_time && $leave->end_time) {
-                        $start_time = new \DateTime($leave->start_time);
-                        $end_time = new \DateTime($leave->end_time);
-                        $interval = $start_time->diff($end_time);
-                        $hours = $interval->h;
-                        $minutes = $interval->i;
-                        $leaveTypeDurationInHours += $hours;
-                        $leaveTypeDurationInMinutes += $minutes;
-                    }
-                }
-
-                // Convertir minutos adicionales en horas
-                $additionalHours = intdiv($leaveTypeDurationInMinutes, 60);
-                $remainingMinutes = $leaveTypeDurationInMinutes % 60;
-                $leaveTypeDurationInHours += $additionalHours;
-
-                // Formatear en HH:MM
-                $totalDurationFormatted = sprintf('%02d:%02d', $leaveTypeDurationInHours, $remainingMinutes);
-
-                $leaveTypeDurations[$leaveType->name] = [
-                    'total_in_days' => $leaveTypeDurationInDays,
-                    'total_in_hours' => $totalDurationFormatted,
-                ];
-            }
-
-            $data = [
-                'totalPermissions' => $totalPermissions,
-                'approvedPermissions' => $approvedPermissions,
-                'disapprovedPermissions' => $disapprovedPermissions,
+            // Agregar el saldo de vacaciones al conjunto de datos
+            $data = array_merge($leaveStats->toArray(), [
                 'leaveTypeDurations' => $leaveTypeDurations,
-            ];
+                'vacationBalance' => $vacationBalanceFormatted
+            ]);
 
             return $this->successResponse('Estadísticas de permisos obtenidas con éxito', $data);
         } catch (\Exception $e) {
@@ -714,6 +766,46 @@ class LeaveService extends ResponseService
         }
     }
 
+    // Formatear el saldo de vacaciones a un formato amigable
+    private function formatVacationBalance(float $balance): string
+    {
+        // Obtener las horas máximas diarias configuradas
+        $maxDailyHours = $this->getMaxDailyHours();
+    
+        // Convertir el balance a días, horas y minutos
+        $days = floor($balance); // Parte entera del balance en días
+        $remainingDecimal = $balance - $days; // Parte decimal para horas y minutos
+        $hours = floor($remainingDecimal * $maxDailyHours); // Convertir la parte decimal a horas
+        $remainingMinutes = round(($remainingDecimal * $maxDailyHours - $hours) * 60); // Convertir la fracción de horas a minutos
+    
+        // Ajustar si los minutos exceden 60
+        if ($remainingMinutes >= 60) {
+            $hours += 1;
+            $remainingMinutes -= 60;
+        }
+    
+        // Ajustar si las horas exceden el máximo diario
+        if ($hours >= $maxDailyHours) {
+            $days += 1;
+            $hours -= $maxDailyHours;
+        }
+    
+        // Crear el formato amigable
+        $formattedBalance = '';
+        if ($days > 0) {
+            $formattedBalance .= "{$days}d";
+        }
+        if ($hours > 0) {
+            $formattedBalance .= ($formattedBalance ? " " : "") . "{$hours}h";
+        }
+        if ($remainingMinutes > 0) {
+            $formattedBalance .= ($formattedBalance ? " " : "") . "{$remainingMinutes}m";
+        }
+    
+        // En caso de que no haya días, horas ni minutos, devolver '0m'
+        return $formattedBalance ?: '0m';
+    }
+    
 
 }
 

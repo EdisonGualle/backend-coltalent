@@ -242,6 +242,46 @@ class LeaveCommentService extends ResponseService
                 // Enviar correo al próximo aprobador
                 $this->sendPendingApprovalNotificationEmail($leave, $nextApprover);
             } else {
+
+                // Validar que el último aprobador tenga un contrato activo
+                $approver = Employee::find($approver_id);
+                if (!$approver || !$approver->currentContract) {
+                    throw new \Exception(
+                        "El aprobador final no tiene un contrato activo asociado. Por favor, contacte con la Unidad de Talento Humano."
+                    );
+                }
+                // Validar si el permiso debe deducir días u horas del saldo de vacaciones
+                if ($leave->leaveType->deducts_from_vacation) {
+                    $contract = $leave->employee->currentContract;
+
+                    if (!$contract) {
+                        throw new \Exception("No se encontró un contrato activo para el empleado solicitante.");
+                    }
+
+                    // Obtener la duración del permiso en formato legible
+                    $durationString = $this->calculateDuration($leave);
+
+                    // Convertir la duración a días
+                    $leaveDurationInDays = $this->convertDurationToDays($durationString);
+
+                    // Validar que el contrato tiene suficiente saldo de vacaciones
+                    if ($contract->vacation_balance < $leaveDurationInDays) {
+                        throw new \Exception("El saldo de vacaciones es insuficiente para aprobar este permiso.");
+                    }
+
+                    $remainingBalance = $contract->vacation_balance - $leaveDurationInDays;
+
+                    // Validar saldo final (si se requiere asegurar estrictamente)
+                    if ($remainingBalance < 0) {
+                        throw new \Exception("Error: El saldo de vacaciones no puede ser negativo.");
+                    }
+
+                    // Restar la duración del saldo de vacaciones
+                    $contract->update([
+                        'vacation_balance' => $contract->vacation_balance - $leaveDurationInDays,
+                    ]);
+                }
+
                 // Si no hay más aprobadores, aprobar definitivamente
                 $leave->update(['state_id' => $this->getStateId('Aprobado')]);
 
@@ -266,6 +306,32 @@ class LeaveCommentService extends ResponseService
             throw $e;
         }
     }
+
+    private function convertDurationToDays(string $duration): float
+    {
+        $days = 0;
+        $hours = 0;
+        $minutes = 0;
+
+        // Extraer días, horas y minutos de la cadena
+        if (preg_match('/(\d+)\s*días?/', $duration, $matches)) {
+            $days = (int) $matches[1];
+        }
+        if (preg_match('/(\d+)\s*horas?/', $duration, $matches)) {
+            $hours = (int) $matches[1];
+        }
+        if (preg_match('/(\d+)\s*minutos?/', $duration, $matches)) {
+            $minutes = (int) $matches[1];
+        }
+
+        // Convertir horas y minutos a días (8 horas = 1 día)
+        $hoursToDays = $hours / 8;
+        $minutesToDays = $minutes / (8 * 60);
+
+        // Sumar todo y retornar el total en días
+        return $days + $hoursToDays + $minutesToDays;
+    }
+
 
     private function createSubrogation(Leave $leave, int $delegateId, array $responsibilities, string $delegateReason)
     {
@@ -359,10 +425,6 @@ class LeaveCommentService extends ResponseService
         // Enviar el correo al subrogante en segundo plano
         Mail::to($delegate->user->email)->queue(new SubrogationNotificationMail($details));
     }
-
-
-
-
 
     private function getNextApprover(Leave $leave, int $approver_id)
     {
