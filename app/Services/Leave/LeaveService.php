@@ -383,10 +383,24 @@ class LeaveService extends ResponseService
                     });
                     break;
                 case 'historial':
-                    $query->whereHas('comments', function ($q) use ($employee_id) {
-                        $q->where('commented_by', $employee_id);
-                    });
-                    break;
+                    // Verificar si el usuario tiene el rol de Administrador
+                    if ($currentEmployee->user->role->name === 'Administrador') {
+                        $query->where(function ($q) use ($employee_id) {
+                            // Incluir solicitudes asignadas al administrador
+                            $q->whereHas('comments', function ($q2) use ($employee_id) {
+                                $q2->where('commented_by', $employee_id);
+                            })
+                                // Incluir también las solicitudes de tipo inmediato
+                                ->orWhereHas('leaveType', function ($q3) {
+                                    $q3->where('flow_type', 'inmediato');
+                                });
+                        });
+                    } else {
+                        // Si no es Administrador, mantener la lógica actual
+                        $query->whereHas('comments', function ($q) use ($employee_id) {
+                            $q->where('commented_by', $employee_id);
+                        });
+                    }
                 default:
                     break;
             }
@@ -771,25 +785,25 @@ class LeaveService extends ResponseService
     {
         // Obtener las horas máximas diarias configuradas
         $maxDailyHours = $this->getMaxDailyHours();
-    
+
         // Convertir el balance a días, horas y minutos
         $days = floor($balance); // Parte entera del balance en días
         $remainingDecimal = $balance - $days; // Parte decimal para horas y minutos
         $hours = floor($remainingDecimal * $maxDailyHours); // Convertir la parte decimal a horas
         $remainingMinutes = round(($remainingDecimal * $maxDailyHours - $hours) * 60); // Convertir la fracción de horas a minutos
-    
+
         // Ajustar si los minutos exceden 60
         if ($remainingMinutes >= 60) {
             $hours += 1;
             $remainingMinutes -= 60;
         }
-    
+
         // Ajustar si las horas exceden el máximo diario
         if ($hours >= $maxDailyHours) {
             $days += 1;
             $hours -= $maxDailyHours;
         }
-    
+
         // Crear el formato amigable
         $formattedBalance = '';
         if ($days > 0) {
@@ -801,11 +815,11 @@ class LeaveService extends ResponseService
         if ($remainingMinutes > 0) {
             $formattedBalance .= ($formattedBalance ? " " : "") . "{$remainingMinutes}m";
         }
-    
+
         // En caso de que no haya días, horas ni minutos, devolver '0m'
         return $formattedBalance ?: '0m';
     }
-    
+
 
 }
 

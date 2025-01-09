@@ -196,7 +196,51 @@ class LeaveCommentService extends ResponseService
         DB::beginTransaction();
         try {
 
+            // Validar el tipo de flujo del permiso
+            if ($leave->leaveType->flow_type === 'inmediato') {
+                // Marcar el permiso como aprobado directamente
+                $leave->update(['state_id' => $this->getStateId('Aprobado')]);
 
+                // Crear notificación final de aprobación
+                $this->createNotification($leave, $approver_id, 'Aprobación final');
+
+                // Validar si el permiso debe deducir días del saldo de vacaciones
+                if ($leave->leaveType->deducts_from_vacation) {
+                    $contract = $leave->employee->currentContract;
+
+                    if (!$contract) {
+                        throw new \Exception("No se encontró un contrato activo para el empleado solicitante.");
+                    }
+
+                    // Obtener la duración del permiso en formato legible
+                    $durationString = $this->calculateDuration($leave);
+
+                    // Convertir la duración a días
+                    $leaveDurationInDays = $this->convertDurationToDays($durationString);
+
+                    // Validar que el contrato tiene suficiente saldo de vacaciones
+                    if ($contract->vacation_balance < $leaveDurationInDays) {
+                        throw new \Exception("El saldo de vacaciones es insuficiente para aprobar este permiso.");
+                    }
+
+                    // Restar la duración del saldo de vacaciones
+                    $contract->update([
+                        'vacation_balance' => $contract->vacation_balance - $leaveDurationInDays,
+                    ]);
+                }
+
+                // Notificar al subrogante asignado, si existe una delegación
+                if ($leave->delegations()->exists()) {
+                    $delegation = $leave->delegations()->first();
+                    $this->notifyDelegate($delegation);
+                }
+
+                DB::commit();
+                return; // Finalizar el flujo aquí para permisos con flujo 'inmediato'
+            }
+
+
+            // Obtener el próximo aprobador
             $nextApprover = $this->getNextApprover($leave, $approver_id);
 
             // Determinar el nivel actual de aprobación basado en los comentarios existentes
