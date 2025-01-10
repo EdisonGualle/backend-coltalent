@@ -39,6 +39,7 @@ return [
             'table' => 'jobs',
             'queue' => 'default',
             'retry_after' => 90,
+            'tries' => 5,
             'after_commit' => false,
         ],
 
