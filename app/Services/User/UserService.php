@@ -114,10 +114,6 @@ class UserService
             if (isset($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
             }
-            Log::info('Datos recibidos del front-end servicio:', $data);
-            $user->update($data);
-            Log::info('Datos actualizados servicio:', ['user' => $user]);
-    
             DB::commit();
     
             $userData = $user->load('userState', 'role', 'employee')->toArray();

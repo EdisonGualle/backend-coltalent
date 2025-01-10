@@ -28,8 +28,6 @@ class StoreLeaveRequest extends FormRequest
             $data = $this->all();
             $leaveType = LeaveType::find($data['leave_type_id']);
 
-         
-
             // Validar la duración máxima basada en el tipo de permiso
             if ($leaveType) {
                 if ($leaveType->time_unit == 'Días') {
@@ -42,7 +40,7 @@ class StoreLeaveRequest extends FormRequest
                             $validator->errors()->add('end_date', "La duración máxima permitida para este tipo de permiso es de {$leaveType->max_duration} días.");
                         }
                     } 
-                   
+            
                 } elseif ($leaveType->time_unit == 'Horas') {
                     if (!empty($data['start_time']) && !empty($data['end_time'])) {
                         $startTime = new \DateTime($data['start_time']);

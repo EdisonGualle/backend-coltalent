@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class ApprovalNotificationMail extends Mailable implements ShouldQueue
 {
@@ -41,8 +42,29 @@ class ApprovalNotificationMail extends Mailable implements ShouldQueue
                 $duration = $days . ' ' . ($days > 1 ? 'Días' : 'Día');
             }
         } elseif ($this->leave->start_time && $this->leave->end_time) {
-            $start_time = Carbon::createFromFormat('H:i', $this->leave->start_time);
-            $end_time = Carbon::createFromFormat('H:i', $this->leave->end_time);
+            try {
+                // Verificar si los valores contienen segundos
+                $start_time_raw = $this->leave->start_time;
+                $end_time_raw = $this->leave->end_time;
+            
+            
+                // Validar formato basado en la cantidad de ":"
+                $start_time_format = (substr_count($start_time_raw, ':') === 2) ? 'H:i:s' : 'H:i';
+                $end_time_format = (substr_count($end_time_raw, ':') === 2) ? 'H:i:s' : 'H:i';
+            
+            
+                // Crear objetos Carbon
+                $start_time = Carbon::createFromFormat($start_time_format, $start_time_raw);
+                $end_time = Carbon::createFromFormat($end_time_format, $end_time_raw);
+
+            } catch (\Exception $e) {
+               
+                $start_time = null;
+                $end_time = null;
+            }
+            
+            
+
             if ($start_time && $end_time) {
                 $interval = $start_time->diff($end_time);
                 $hours = $interval->h;
@@ -61,17 +83,17 @@ class ApprovalNotificationMail extends Mailable implements ShouldQueue
         }
 
         return $this->view('emails.approval_notification')
-                    ->subject('Nueva Solicitud de Permiso Pendiente')
-                    ->with([
-                        'approverName' => $this->approver->getFullNameAttribute(),
-                        'applicantName' => $this->applicant->getFullNameAttribute(),
-                        'startDate' => $startDate,
-                        'endDate' => $endDate,
-                        'startTime' => $startTime,
-                        'endTime' => $endTime,
-                        'duration' => $duration,
-                        'leaveType' => $this->leave->leaveType->name,
-                        'leaveReason' => $this->leave->reason,
-                    ]);
+            ->subject('Nueva Solicitud de Permiso Pendiente')
+            ->with([
+                'approverName' => $this->approver->getFullNameAttribute(),
+                'applicantName' => $this->applicant->getFullNameAttribute(),
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'startTime' => $startTime,
+                'endTime' => $endTime,
+                'duration' => $duration,
+                'leaveType' => $this->leave->leaveType->name,
+                'leaveReason' => $this->leave->reason,
+            ]);
     }
 }

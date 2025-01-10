@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class EmployeeService
 {
@@ -29,14 +30,14 @@ class EmployeeService
             },
             'contracts' => function ($query) {
                 $query->where('is_active', true);
-            }, 
+            },
         ])
             ->get()
             ->map(function ($employee) {
                 $employee->full_name = $employee->getFullNameAttribute();
                 $employee->employee_name = $employee->getNameAttribute();
                 $employee->photo = $employee->userPhoto();
-                $employee->has_active_contract = $employee->contracts->isNotEmpty(); 
+                $employee->has_active_contract = $employee->contracts->isNotEmpty();
                 unset($employee->contact_id, $employee->address_id, $employee->position_id);
                 return $employee;
             })
@@ -53,11 +54,11 @@ class EmployeeService
                     $query->where('is_active', true)->with('contractType');
                 }
             ])
-            ->whereHas('contracts', function ($query) {
-                $query->where('is_active', true);
-            })
-            ->get();
-    
+                ->whereHas('contracts', function ($query) {
+                    $query->where('is_active', true);
+                })
+                ->get();
+
             return $employees->map(function ($employee) {
                 $activeContract = $employee->contracts->first();
                 return [
@@ -81,7 +82,7 @@ class EmployeeService
             throw new Exception('Error al obtener empleados con contratos activos.');
         }
     }
-    
+
 
 
     public function getEmployeeById($id)

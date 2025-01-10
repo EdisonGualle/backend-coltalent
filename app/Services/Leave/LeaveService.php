@@ -129,11 +129,7 @@ class LeaveService extends ResponseService
             return $this->successResponse('Solicitud de permiso creada con éxito', $leave, 201);
         } catch (\Exception $e) {
             DB::rollBack();
-
-            // Registrar el mensaje del error en los logs
-            Log::error('Error al crear la solicitud de permiso: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString() // Agregar el stack trace para mayor detalle
-            ]);
+            
             return $this->errorResponse('No se pudo crear la solicitud de permiso: ' . $e->getMessage(), 500);
         }
     }
@@ -571,10 +567,6 @@ class LeaveService extends ResponseService
             return $this->errorResponse('Error al obtener las solicitudes de permisos: ' . $e->getMessage(), 500);
         }
     }
-
-
-
-
 
 
     // Obtener las solicitudes de permiso de un empleado que solicita el permiso

@@ -25,32 +25,32 @@ class LeaveController extends Controller
     {
         $data = $request->all();
 
-    // Manejar la subida de archivo
-    if ($request->hasFile('attachment')) {
-        $file = $request->file('attachment');
-        
-        // Obtener el nombre original
-        $originalName = $file->getClientOriginalName();
-        $filenameWithoutExtension = pathinfo($originalName, PATHINFO_FILENAME);
-        $extension = $file->getClientOriginalExtension();
-        $safeName = Str::slug($filenameWithoutExtension); // Limpiar caracteres no deseados
-        $finalName = $safeName . '.' . $extension; // Nombre inicial
+        // Manejar la subida de archivo
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
 
-        // Verificar si ya existe un archivo con el mismo nombre
-        $storagePath = 'leave_documents/' . $finalName;
-        $counter = 1;
+            // Obtener el nombre original
+            $originalName = $file->getClientOriginalName();
+            $filenameWithoutExtension = pathinfo($originalName, PATHINFO_FILENAME);
+            $extension = $file->getClientOriginalExtension();
+            $safeName = Str::slug($filenameWithoutExtension); // Limpiar caracteres no deseados
+            $finalName = $safeName . '.' . $extension; // Nombre inicial
 
-        while (Storage::disk('public')->exists($storagePath)) {
-            // Si existe, agregar un sufijo numérico
-            $finalName = $safeName . '_' . $counter . '.' . $extension;
+            // Verificar si ya existe un archivo con el mismo nombre
             $storagePath = 'leave_documents/' . $finalName;
-            $counter++;
-        }
+            $counter = 1;
 
-        // Guardar el archivo con el nombre final
-        $path = $file->storeAs('leave_documents', $finalName, 'public');
-        $data['attachment'] = $path;
-    }
+            while (Storage::disk('public')->exists($storagePath)) {
+                // Si existe, agregar un sufijo numérico
+                $finalName = $safeName . '_' . $counter . '.' . $extension;
+                $storagePath = 'leave_documents/' . $finalName;
+                $counter++;
+            }
+
+            // Guardar el archivo con el nombre final
+            $path = $file->storeAs('leave_documents', $finalName, 'public');
+            $data['attachment'] = $path;
+        }
 
 
         return $this->leaveService->createLeave($employee, $data);
@@ -59,10 +59,10 @@ class LeaveController extends Controller
     public function getFilteredLeaves(Request $request, int $employee): JsonResponse
     {
         $filter = $request->query('filter', 'todos');
-    
+
         // Llamar al servicio y obtener los datos
         $response = $this->leaveService->getLeavesByFilter($employee, $filter);
-    
+
         return $response;
     }
 

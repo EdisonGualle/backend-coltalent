@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class LeaveRequestedMail extends Mailable implements ShouldQueue
 {
@@ -42,8 +43,15 @@ class LeaveRequestedMail extends Mailable implements ShouldQueue
                 $duration = $days . ' ' . ($days > 1 ? 'Días' : 'Día');
             }
         } elseif ($this->leave->start_time && $this->leave->end_time) {
-            $start_time = Carbon::createFromFormat('H:i', $this->leave->start_time);
-            $end_time = Carbon::createFromFormat('H:i', $this->leave->end_time);
+              // Extraer solo horas y minutos si vienen con segundos
+        $start_time = substr($this->leave->start_time, 0, 5); // Ejemplo: 08:00
+        $end_time = substr($this->leave->end_time, 0, 5);
+
+        // Convertir a Carbon
+        $start_time = Carbon::createFromFormat('H:i', $start_time);
+        $end_time = Carbon::createFromFormat('H:i', $end_time);
+
+
             if ($start_time && $end_time) {
                 $interval = $start_time->diff($end_time);
                 $hours = $interval->h;
