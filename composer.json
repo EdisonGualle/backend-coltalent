@@ -12,7 +12,8 @@
         "laravel/tinker": "^2.8",
         "phpoffice/phpspreadsheet": "^2.2",
         "pusher/pusher-php-server": "^7.2",
-        "spatie/simple-excel": "^3.6"
+        "spatie/simple-excel": "^3.6",
+        "voku/portable-ascii": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
