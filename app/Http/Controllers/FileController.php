@@ -10,7 +10,7 @@ class FileController extends Controller
 {
     public function show($path)
     {
-        $fullPath = public_path('storage/' . $path);
+        $fullPath = storage_path('app/public/' . $path); // Ruta pa donde se guardan los archivos en el servidor - despliegue
 
         if (!file_exists($fullPath)) {
             abort(404);
