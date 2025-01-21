@@ -12,7 +12,20 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
+       '/sanctum/csrf-cookie',
        '/broadcasting/auth',
-       'backend/public/api/login'
     ];
-}
+
+    
+
+    protected function tokensMatch($request)
+    {
+        $token = $request->header('X-XSRF-TOKEN') ?: $request->input('_token');
+        $sessionToken = $request->session()->token();
+        
+        return hash_equals((string) $sessionToken, (string) $token);
+    }
+    
+    
+    
+}   

@@ -43,8 +43,7 @@ class AuthenticationService
 
         if ($this->attemptLogin($user, $password)) {
             $user->update(['failed_attempts' => 0]);
-            $token = $user->createToken('API_TOKEN')->plainTextToken;
-            return $this->handleSuccessfulLogin($user, $token);
+            return $this->handleSuccessfulLogin($user);
         }
 
         $failedAttempts++;
@@ -100,7 +99,7 @@ class AuthenticationService
 
     protected function handleUserNotFound($username, $email)
     {
-      $message = 'Credenciales incorrectas.';
+        $message = 'Credenciales incorrectas.';
 
         return ['successful' => false, 'message' => $message];
     }
@@ -122,9 +121,12 @@ class AuthenticationService
         return ['successful' => false, 'message' => $message, 'remainingTime' => $remainingTime];
     }
 
-    protected function handleSuccessfulLogin($user, $token)
+    protected function handleSuccessfulLogin($user)
     {
+        // Eliminar tokens existentes antes de crear uno nuevo
         $user->tokens()->delete();
+
+        // Generar un nuevo token
         $token = $user->createToken('API_TOKEN')->plainTextToken;
 
         return [

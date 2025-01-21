@@ -3,6 +3,12 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Cookie\Middleware\EncryptCookies as Middleware;
+use Illuminate\Http\Request;
+use Closure;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
+
+
 
 class EncryptCookies extends Middleware
 {
@@ -12,6 +18,8 @@ class EncryptCookies extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        //
+       'XSRF-TOKEN',
     ];
+
+
 }

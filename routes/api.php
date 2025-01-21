@@ -53,12 +53,6 @@ Route::post('login', [AuthController::class, 'login']);
 Route::post('forgot-password', [ResetPasswordController::class, "changePassword"]);
 Route::get('employees/{employee}/leave-statistics/export', [LeaveExportController::class, 'export']);
 
-
-
-Route::get('/statistics/aprobaciones/mes/{employeeId}', [LeaveStatisticsController::class, 'getAprobacionesPorMes']);
-Route::get('/statistics/aprobaciones/tipo/{employeeId}', [LeaveStatisticsController::class, 'getAprobacionesPorTipo']);
-Route::get('/dashboard-statistics', [DashboardStatisticsController::class, 'getStatistics']);
-
 // Ruta para obtener las estadísticas de permisos por estado para un empleado solicitante
 Route::get('/dashboard-statistics/solicitudes/{employeeId}', [DashboardStatisticsController::class, 'getSolicitudesPermisosPorEmpleado']);
 
@@ -71,6 +65,13 @@ Route::get('/leave-report', [LeaveReportController::class, 'generateReport']);
 Route::middleware('auth:sanctum')->group(function () {
 
     Broadcast::routes();
+
+
+
+    Route::get('/statistics/aprobaciones/mes/{employeeId}', [LeaveStatisticsController::class, 'getAprobacionesPorMes']);
+    Route::get('/statistics/aprobaciones/tipo/{employeeId}', [LeaveStatisticsController::class, 'getAprobacionesPorTipo']);
+    Route::get('/dashboard-statistics', [DashboardStatisticsController::class, 'getStatistics']);
+
 
     // Notificaciones
     // Obtener notificaciones no leídas
@@ -237,7 +238,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [ScheduleController::class, 'update']);
         Route::delete('/{id}', [ScheduleController::class, 'destroy']);
         Route::patch('/{id}/restore', [ScheduleController::class, 'restore']);
-        
+
     });
 
     // Rutas para las asignaciones de horarios a empleados

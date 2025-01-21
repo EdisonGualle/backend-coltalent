@@ -11,7 +11,7 @@ class CreateUnitRequest extends FormRequest
         return [
             'name' => 'required|string|max:150|unique:units,name',
             'function' => 'required|string|max:255',
-            'phone' => 'nullable|digits:10',
+            'phone' => 'nullable|digits:9',
             'direction_id' => 'required|exists:directions,id',
         ];
     }
@@ -26,7 +26,7 @@ class CreateUnitRequest extends FormRequest
             'function.required' => 'La función de la unidad es obligatoria.',
             'function.string' => 'La función de la unidad debe ser una cadena de texto.',
             'function.max' => 'La función de la unidad no puede tener más de 255 caracteres.',
-            'phone.digits' => 'El teléfono de la unidad debe tener 10 dígitos.',
+            'phone.digits' => 'El teléfono de la unidad debe tener 9 dígitos.',
             'direction_id.required' => 'El ID de la dirección es obligatorio.',
             'direction_id.exists' => 'La dirección seleccionada no existe.',
         ];
