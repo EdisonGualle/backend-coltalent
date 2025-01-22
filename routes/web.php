@@ -12,7 +12,4 @@ Route::post('/recuperar-contraseña', [ResetPasswordController::class,'restablec
 
 Route::get('/show/{path}', [FileController::class, 'show'])->where('path', '.*');
 
-// Envolver las rutas de broadcasting con el middleware auth:sanctum
-Route::middleware('auth:sanctum')->group(function () {
-    Broadcast::routes(); // Esta línea asegura que /broadcasting/auth esté protegido
-});
+
