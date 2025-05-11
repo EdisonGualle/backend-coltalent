@@ -18,7 +18,7 @@ class UnitController extends Controller
 
     public function index()
     {
-        return $this->unitService->getAllUnits();
+        return $this->unitService->getAllUnits( true);
     }
 
      // Obtener todas las unidades, incluyendo las inactivas

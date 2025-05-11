@@ -18,7 +18,7 @@ class PositionController extends Controller
 
     public function index()
     {
-        return $this->positionService->getAllPositions();
+        return $this->positionService->getAllPositions(true);
     }
 
     // Obtener todas las posiciones, incluyendo las inactivas

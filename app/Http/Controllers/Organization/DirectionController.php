@@ -18,14 +18,14 @@ class DirectionController extends Controller
 
     public function index()
     {
-        return $this->directionService->getAllDirections();
+        return $this->directionService->getAllDirections(true);
     }
 
-      // Obtener todas las direcciones, incluyendo las inactivas
-      public function indexIncludingDeleted()
-      {
-          return $this->directionService->getAllDirections(true);
-      }
+    // Obtener todas las direcciones, incluyendo las inactivas
+    public function indexIncludingDeleted()
+    {
+        return $this->directionService->getAllDirections(true);
+    }
 
     public function store(CreateDirectionRequest $request)
     {
@@ -47,9 +47,9 @@ class DirectionController extends Controller
         return $this->directionService->deleteDirection($id);
     }
 
-      // Alternar el estado de activación de una dirección
-      public function toggleStatus(string $id)
-      {
-          return $this->directionService->toggleDirectionStatus($id);
-      }
+    // Alternar el estado de activación de una dirección
+    public function toggleStatus(string $id)
+    {
+        return $this->directionService->toggleDirectionStatus($id);
+    }
 }

@@ -289,6 +289,7 @@ class LeaveService extends ResponseService
             ],
         ]);
 
+
         event(new NotificationEvent($notification));
 
         // Enviar el correo electrónico al aprobador

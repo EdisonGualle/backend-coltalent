@@ -151,6 +151,9 @@ class EmployeeService
                 $employeeData = $request->input('employee');
                 $employee = new Employee($employeeData);
 
+                Log::info('Datos del empleado:', $employeeData);
+
+
                 // Crear el registro de contacto asociado al empleado
                 $contactData = $request->input('employee.contact');
                 if ($contactData) {
@@ -221,6 +224,7 @@ class EmployeeService
 
                 return $employee;
             } catch (Exception $e) {
+                Log::error('Error al crear el empleado: ' . $e->getMessage());
                 throw new Exception($e->getMessage());
             }
         });

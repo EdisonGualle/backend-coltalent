@@ -64,6 +64,8 @@ Route::get('/dashboard-statistics/solicitudes/{employeeId}', [DashboardStatistic
 
 // Ruta para probar que funcione correctamente las exportaciones 
 Route::get('/export-approved-leaves', [ReportController::class, 'approvedLeavesReport']);
+// Ruta para exportar empleados
+Route::get('/export-employees', [ReportController::class, 'export']);
 
 Route::get('/leave-report', [LeaveReportController::class, 'generateReport']);
 

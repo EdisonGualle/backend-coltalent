@@ -452,7 +452,7 @@ class LeaveCommentService extends ResponseService
                 'message' => $message,
             ],
         ]);
-
+     
         // Disparar evento de notificación push
         event(new NotificationEvent($notification));
 

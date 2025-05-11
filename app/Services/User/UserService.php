@@ -30,7 +30,7 @@ class UserService
             'email' => $user->email,
         ];
     }
-    
+
     public function getAllUsers()
     {
         $users = User::with('userState', 'role', 'employee')->get();
@@ -43,7 +43,7 @@ class UserService
                 $name = null;
             }
             $userData['employee_name'] = $name;
-            unset ($userData['user_state_id'], $userData['role_id'], $userData['employee']);
+            unset($userData['user_state_id'], $userData['role_id'], $userData['employee']);
 
             return $userData;
         });
@@ -61,7 +61,7 @@ class UserService
     {
         try {
             $data['user_state_id'] = $data['user_state_id'] ?? UserState::where('name', 'Activo')->firstOrFail()->id;
-            
+
             // Generate a random password
             $password = $this->generateRandomPassword();
             $data['password'] = Hash::make($password);
@@ -104,64 +104,69 @@ class UserService
     }
 
 
-    public function updateUser($id, $data)
-    {
-        $user = User::findOrFail($id);
-    
-        DB::beginTransaction();
-        try {
-            // Actualizar los datos del usuario
-            if (isset($data['password'])) {
-                $data['password'] = Hash::make($data['password']);
-            }
-            DB::commit();
-    
-            $userData = $user->load('userState', 'role', 'employee')->toArray();
-            if ($user->employee) {
-                $userData['employee_name'] = $user->employee->getNameAttribute();
-            } else {
-                $userData['employee_name'] = null;
-            }
-         
-            return $userData;
-    
-        } catch (Exception $e) {
-            DB::rollBack();
-            throw new Exception('Error al actualizar el usuario: ' . $e->getMessage());
+public function updateUser($id, array $data)
+{
+    Log::info("Iniciando updateUser", ['id' => $id, 'payload' => $data]);
+
+    $user = User::findOrFail($id);
+
+    DB::beginTransaction();
+    try {
+        if (isset($data['password'])) {
+            $data['password'] = Hash::make($data['password']);
         }
+
+        // **¡Aquí faltaba la actualización!**
+        $user->update($data);
+       
+
+        DB::commit();
+
+        $userData = $user->load('userState', 'role', 'employee')->toArray();
+        $userData['employee_name'] = $user->employee
+            ? $user->employee->getNameAttribute()
+            : null;
+
+       
+        return $userData;
+
+    } catch (Exception $e) {
+        DB::rollBack();
+        
+        throw new Exception("Error al actualizar el usuario: " . $e->getMessage());
     }
-    
+}
     public function updateUserPhoto($id, $photo)
     {
         $user = User::findOrFail($id);
-    
+
         $oldPhotoPath = $user->photo;
-    
+
         DB::beginTransaction();
         try {
             // Subir la nueva foto y obtener su ruta
             $newPhotoPath = $photo->store('users_photo', 'public');
-    
+
             // Asignar la nueva foto al usuario
             $user->photo = $newPhotoPath;
             $user->save();
-    
+
             // Eliminar la foto anterior si existe y es diferente a la nueva
             if ($oldPhotoPath && $oldPhotoPath !== $newPhotoPath) {
                 Storage::disk('public')->delete($oldPhotoPath);
             }
             DB::commit();
-    
+
             return response()->json([
                 'photo' => $newPhotoPath
             ]);
-    
+
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al actualizar la foto de perfil: ' . $e->getMessage());
         }
     }
-    
+
     public function getUserAuth()
     {
         $user = Auth::user();
@@ -189,16 +194,16 @@ class UserService
         if ($id == $currentUserId) {
             throw new Exception('No se puede desactivar a sí mismo');
         }
-    
+
         $user = User::findOrFail($id);
         $inactiveStateId = UserState::where('name', 'Inactivo')->firstOrFail()->id;
-    
+
         DB::beginTransaction();
         try {
             $user->user_state_id = $inactiveStateId;
             $user->save();
             DB::commit();
-    
+
             $userData = $user->load('userState', 'role', 'employee')->toArray();
             if ($user->employee) {
                 $userData['employee_name'] = $user->employee->getNameAttribute();
@@ -206,26 +211,26 @@ class UserService
                 $userData['employee_name'] = null;
             }
             unset($userData['user_state_id'], $userData['role_id'], $userData['employee']);
-    
+
             return $userData;
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al desactivar el usuario: ' . $e->getMessage());
         }
     }
-    
-    
+
+
     public function enableUser($id)
     {
         $user = User::findOrFail($id);
         $activeStateId = UserState::where('name', 'Activo')->firstOrFail()->id;
-    
+
         DB::beginTransaction();
         try {
             $user->user_state_id = $activeStateId;
             $user->save();
             DB::commit();
-    
+
             $userData = $user->load('userState', 'role', 'employee')->toArray();
             if ($user->employee) {
                 $userData['employee_name'] = $user->employee->getNameAttribute();
@@ -233,14 +238,14 @@ class UserService
                 $userData['employee_name'] = null;
             }
             unset($userData['user_state_id'], $userData['role_id'], $userData['employee']);
-    
+
             return $userData;
         } catch (Exception $e) {
             DB::rollBack();
             throw new Exception('Error al habilitar al usuario: ' . $e->getMessage());
         }
     }
-    
+
     public function deleteUser($id)
     {
         $user = User::findOrFail($id);
@@ -267,19 +272,19 @@ class UserService
 
 
     public function changePassword($userId, $currentPassword, $newPassword)
-{
-    $user = User::findOrFail($userId);
+    {
+        $user = User::findOrFail($userId);
 
-    // Verificar la contraseña actual
-    if (!Hash::check($currentPassword, $user->password)) {
-        throw new Exception('La contraseña actual no es correcta.');
+        // Verificar la contraseña actual
+        if (!Hash::check($currentPassword, $user->password)) {
+            throw new Exception('La contraseña actual no es correcta.');
+        }
+
+        // Actualizar la contraseña
+        $user->password = Hash::make($newPassword);
+        $user->save();
+
+        return 'Contraseña actualizada correctamente.';
     }
-
-    // Actualizar la contraseña
-    $user->password = Hash::make($newPassword);
-    $user->save();
-
-    return 'Contraseña actualizada correctamente.';
-}
 
 }
